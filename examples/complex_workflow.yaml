@@ -1,0 +1,57 @@
+name: Complex Data Processing Workflow
+description: A more complex workflow that fetches data, processes it, and makes conditional decisions
+
+nodes:
+  - id: start
+    node_type: start
+    name: Start
+    parameters: {}
+
+  - id: fetch_post
+    node_type: http_request
+    name: Fetch Post
+    parameters:
+      url: "https://jsonplaceholder.typicode.com/posts/1"
+      method: "GET"
+
+  - id: extract_user_id
+    node_type: transform
+    name: Extract User ID
+    parameters:
+      expression: "body.userId"
+
+  - id: check_user
+    node_type: conditional
+    name: Check User ID
+    parameters:
+      field: "."
+      operator: "eq"
+      value: 1
+
+  - id: fetch_user_details
+    node_type: http_request
+    name: Fetch User Details
+    parameters:
+      url: "https://jsonplaceholder.typicode.com/users/1"
+      method: "GET"
+
+  - id: combine_data
+    node_type: transform
+    name: Combine Data
+    parameters:
+      template:
+        post_id: "{{id}}"
+        user_name: "{{name}}"
+        combined: true
+
+edges:
+  - from: start
+    to: fetch_post
+  - from: fetch_post
+    to: extract_user_id
+  - from: extract_user_id
+    to: check_user
+  - from: check_user
+    to: fetch_user_details
+  - from: fetch_user_details
+    to: combine_data

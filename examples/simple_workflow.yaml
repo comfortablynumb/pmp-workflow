@@ -1,0 +1,29 @@
+name: Simple Workflow
+description: A simple workflow that demonstrates basic functionality
+
+nodes:
+  - id: start
+    node_type: start
+    name: Start
+    parameters: {}
+
+  - id: set_var
+    node_type: set_variable
+    name: Set Variable
+    parameters:
+      name: greeting
+      value: "Hello from the workflow!"
+
+  - id: transform
+    node_type: transform
+    name: Transform Data
+    parameters:
+      template:
+        message: "{{$greeting}}"
+        timestamp: "{{timestamp}}"
+
+edges:
+  - from: start
+    to: set_var
+  - from: set_var
+    to: transform

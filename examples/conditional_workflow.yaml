@@ -1,0 +1,40 @@
+name: Conditional Workflow
+description: A workflow that uses conditional logic to branch execution
+
+nodes:
+  - id: start
+    node_type: start
+    name: Start
+    parameters: {}
+
+  - id: check_value
+    node_type: conditional
+    name: Check Value
+    parameters:
+      field: "value"
+      operator: "gt"
+      value: 50
+
+  - id: high_value_transform
+    node_type: transform
+    name: High Value Transform
+    parameters:
+      template:
+        result: "high"
+        message: "Value is greater than 50"
+
+  - id: low_value_transform
+    node_type: transform
+    name: Low Value Transform
+    parameters:
+      template:
+        result: "low"
+        message: "Value is 50 or less"
+
+edges:
+  - from: start
+    to: check_value
+  - from: check_value
+    to: high_value_transform
+  - from: check_value
+    to: low_value_transform
