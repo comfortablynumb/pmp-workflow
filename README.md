@@ -9,12 +9,16 @@ A Rust-based workflow automation engine similar to n8n, with YAML-based configur
 - **YAML Configuration**: Define workflows using simple YAML files
 - **Extensible Node System**: Easy-to-extend node architecture for custom integrations
 - **PostgreSQL Persistence**: Store workflows and execution history in PostgreSQL
+- **Multiple Trigger Types**:
+  - **Manual**: CLI or API-triggered execution
+  - **Webhook**: HTTP endpoint triggers
+  - **Schedule**: Cron-based scheduling (external scheduler required)
 - **Built-in Node Types**:
-  - **Start**: Entry point for workflows
   - **HTTP Request**: Make HTTP/REST API calls
   - **Transform**: Transform and manipulate data
   - **Conditional**: Branch based on conditions
   - **Set Variable**: Manage workflow variables
+- **Webhook Server**: Built-in HTTP server for webhook endpoints
 - **Execution Tracking**: Full execution history and detailed logging
 - **CLI Interface**: Command-line tool for managing and executing workflows
 
@@ -155,9 +159,82 @@ edges:
 
 ## Node Types
 
-### Start Node
+### Trigger Nodes
 
-Entry point for the workflow. Passes through input data.
+Trigger nodes define how a workflow is started. Every workflow should have one trigger node as the entry point.
+
+#### Manual Trigger
+
+Manually execute a workflow via CLI or API with custom input data.
+
+```yaml
+- id: manual_trigger
+  node_type: manual_trigger
+  name: Manual Trigger
+  parameters:
+    description: "Manually execute this workflow"
+    input_schema:  # Optional schema definition
+      type: object
+      properties:
+        order_id:
+          type: number
+```
+
+Execute manually:
+```bash
+cargo run -- execute "My Workflow" --input '{"order_id": 123}'
+```
+
+#### Webhook Trigger
+
+Trigger a workflow via HTTP webhook endpoint.
+
+```yaml
+- id: webhook_trigger
+  node_type: webhook_trigger
+  name: Webhook Trigger
+  parameters:
+    method: POST  # GET, POST, PUT, DELETE, PATCH
+    description: "Accepts webhook requests"
+```
+
+Start the webhook server:
+```bash
+cargo run -- serve --host 0.0.0.0 --port 3000
+```
+
+Trigger the workflow via HTTP:
+```bash
+curl -X POST http://localhost:3000/api/v1/webhook/{workflow-id}/trigger/{trigger-node-id} \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 123, "action": "create"}'
+```
+
+#### Schedule Trigger
+
+Trigger a workflow based on a cron schedule. The workflow must be triggered externally by a scheduler.
+
+```yaml
+- id: schedule_trigger
+  node_type: schedule_trigger
+  name: Daily Schedule
+  parameters:
+    cron: "0 0 0 * * *"  # Daily at midnight (format: sec min hour day month day-of-week)
+    timezone: "UTC"
+    description: "Runs daily data sync"
+```
+
+Cron format: `second minute hour day-of-month month day-of-week`
+
+Common patterns:
+- `0 0 0 * * *` - Daily at midnight
+- `0 0 */2 * * *` - Every 2 hours
+- `0 */5 * * * *` - Every 5 minutes
+- `0 0 9-17 * * MON-FRI` - Weekdays 9am-5pm
+
+### Start Node (Legacy)
+
+Entry point for the workflow. Passes through input data. **Note:** Consider using trigger nodes instead.
 
 ```yaml
 - id: start
@@ -166,7 +243,9 @@ Entry point for the workflow. Passes through input data.
   parameters: {}
 ```
 
-### HTTP Request Node
+### Action Nodes
+
+#### HTTP Request Node
 
 Makes HTTP requests to external APIs.
 
@@ -260,10 +339,16 @@ Sets workflow variables for use in downstream nodes.
 
 See the `examples/` directory for complete workflow examples:
 
+**Basic Workflows:**
 - `simple_workflow.yaml`: Basic workflow demonstrating variables and transforms
 - `http_workflow.yaml`: Fetching data from an API
 - `conditional_workflow.yaml`: Branching based on conditions
 - `complex_workflow.yaml`: Complex multi-step workflow
+
+**Trigger Workflows:**
+- `manual_trigger_workflow.yaml`: Manual workflow execution with input data
+- `webhook_trigger_workflow.yaml`: Webhook-triggered data processing
+- `schedule_trigger_workflow.yaml`: Scheduled data synchronization
 
 ### Example: Simple HTTP API Workflow
 

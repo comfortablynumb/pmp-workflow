@@ -18,6 +18,14 @@ serde_yaml = "0.9"
 # HTTP client
 reqwest = { version = "0.11", features = ["json"] }
 
+# HTTP server
+axum = { version = "0.7", features = ["macros"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+
+# Cron parsing
+cron = "0.12"
+
 # Error handling
 anyhow = "1.0"
 thiserror = "1.0"

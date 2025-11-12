@@ -1,0 +1,51 @@
+name: Manual Workflow Execution
+description: A workflow that is manually triggered with input data
+
+nodes:
+  - id: manual_trigger
+    node_type: manual_trigger
+    name: Manual Trigger
+    parameters:
+      description: "Manually execute this workflow with custom input"
+      input_schema:
+        type: object
+        properties:
+          order_id:
+            type: number
+          customer_email:
+            type: string
+
+  - id: fetch_order
+    node_type: http_request
+    name: Fetch Order Details
+    parameters:
+      url: "https://jsonplaceholder.typicode.com/posts/1"
+      method: "GET"
+
+  - id: extract_details
+    node_type: transform
+    name: Extract Order Details
+    parameters:
+      template:
+        order_id: "{{order_id}}"
+        title: "{{title}}"
+        body: "{{body}}"
+        processed_at: "{{triggered_at}}"
+
+  - id: send_confirmation
+    node_type: transform
+    name: Prepare Confirmation
+    parameters:
+      template:
+        status: "confirmed"
+        order_id: "{{order_id}}"
+        customer_email: "{{customer_email}}"
+        message: "Your order has been processed"
+
+edges:
+  - from: manual_trigger
+    to: fetch_order
+  - from: fetch_order
+    to: extract_details
+  - from: extract_details
+    to: send_confirmation

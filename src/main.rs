@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use pmp_workflow::{config, create_node_registry, db, WorkflowExecutor};
+use pmp_workflow::{config, create_node_registry, db, server, WorkflowExecutor};
 use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -59,6 +59,17 @@ enum Commands {
     Show {
         /// Execution ID
         execution_id: String,
+    },
+
+    /// Start webhook server
+    Serve {
+        /// Host to bind to
+        #[arg(long, default_value = "0.0.0.0")]
+        host: String,
+
+        /// Port to bind to
+        #[arg(long, default_value = "3000")]
+        port: u16,
     },
 }
 
@@ -220,6 +231,13 @@ async fn main() -> Result<()> {
                     println!("    Error: {}", error);
                 }
             }
+        }
+
+        Commands::Serve { host, port } => {
+            tracing::info!("Starting webhook server on {}:{}", host, port);
+
+            // Start the webhook server
+            server::start_server(pool, &host, port).await?;
         }
     }
 

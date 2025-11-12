@@ -1,0 +1,45 @@
+name: Webhook Triggered Workflow
+description: A workflow that can be triggered via webhook HTTP endpoint
+
+nodes:
+  - id: webhook_trigger
+    node_type: webhook_trigger
+    name: Webhook Trigger
+    parameters:
+      method: POST
+      description: "Accepts webhook requests to process user data"
+
+  - id: validate_data
+    node_type: transform
+    name: Validate and Extract Data
+    parameters:
+      template:
+        user_id: "{{user_id}}"
+        action: "{{action}}"
+        timestamp: "{{timestamp}}"
+        validated: true
+
+  - id: check_action
+    node_type: conditional
+    name: Check Action Type
+    parameters:
+      field: "action"
+      operator: "eq"
+      value: "create"
+
+  - id: process_data
+    node_type: transform
+    name: Process Data
+    parameters:
+      template:
+        status: "processed"
+        user_id: "{{user_id}}"
+        message: "Data processed successfully"
+
+edges:
+  - from: webhook_trigger
+    to: validate_data
+  - from: validate_data
+    to: check_action
+  - from: check_action
+    to: process_data

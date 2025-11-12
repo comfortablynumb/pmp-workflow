@@ -1,0 +1,39 @@
+name: Scheduled Data Sync Workflow
+description: A workflow that runs on a schedule to sync data from external API
+
+nodes:
+  - id: schedule_trigger
+    node_type: schedule_trigger
+    name: Daily Schedule Trigger
+    parameters:
+      cron: "0 0 0 * * *"  # Daily at midnight UTC (format: sec min hour day month day-of-week)
+      timezone: "UTC"
+      description: "Runs daily data synchronization"
+
+  - id: fetch_data
+    node_type: http_request
+    name: Fetch Latest Data
+    parameters:
+      url: "https://jsonplaceholder.typicode.com/posts"
+      method: "GET"
+
+  - id: transform_data
+    node_type: transform
+    name: Transform Response
+    parameters:
+      expression: "body"
+
+  - id: set_sync_status
+    node_type: set_variable
+    name: Set Sync Status
+    parameters:
+      name: "last_sync"
+      value: "{{triggered_at}}"
+
+edges:
+  - from: schedule_trigger
+    to: fetch_data
+  - from: fetch_data
+    to: transform_data
+  - from: transform_data
+    to: set_sync_status
