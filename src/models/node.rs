@@ -108,6 +108,8 @@ pub enum NodeSubcategory {
     Database,
     /// Storage operations (S3, file systems, etc.)
     Storage,
+    /// AI/LLM operations (OpenAI, Gemini, Bedrock, etc.)
+    AI,
     /// Workflow execution actions
     Workflow,
     /// Variable management actions

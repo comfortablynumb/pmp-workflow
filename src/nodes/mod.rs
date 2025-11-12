@@ -1,8 +1,11 @@
+pub mod bedrock;
 pub mod conditional;
 pub mod database_query;
 pub mod execute_workflow;
+pub mod gemini;
 pub mod http_request;
 pub mod manual_trigger;
+pub mod openai;
 pub mod redis;
 pub mod s3;
 pub mod schedule_trigger;
@@ -11,11 +14,14 @@ pub mod start;
 pub mod transform;
 pub mod webhook_trigger;
 
+pub use bedrock::BedrockNode;
 pub use conditional::ConditionalNode;
 pub use database_query::DatabaseQueryNode;
 pub use execute_workflow::ExecuteWorkflowNode;
+pub use gemini::GeminiNode;
 pub use http_request::HttpRequestNode;
 pub use manual_trigger::ManualTriggerNode;
+pub use openai::OpenAINode;
 pub use redis::RedisNode;
 pub use s3::S3Node;
 pub use schedule_trigger::ScheduleTriggerNode;
@@ -45,6 +51,11 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("database_query", || Box::new(DatabaseQueryNode::new()));
     registry.register("redis", || Box::new(RedisNode::new()));
     registry.register("s3", || Box::new(S3Node::new()));
+
+    // AI nodes
+    registry.register("openai", || Box::new(OpenAINode::new()));
+    registry.register("gemini", || Box::new(GeminiNode::new()));
+    registry.register("bedrock", || Box::new(BedrockNode::new()));
 
     // Sub-workflow execution (requires dependencies)
     let pool_clone = pool.clone();
