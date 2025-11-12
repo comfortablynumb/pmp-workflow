@@ -18,10 +18,13 @@ A Rust-based workflow automation engine similar to n8n, with YAML-based configur
   - **Transform**: Transform and manipulate data
   - **Conditional**: Branch based on conditions
   - **Set Variable**: Manage workflow variables
+  - **Execute Workflow**: Execute sub-workflows
 - **Webhook Server**: Built-in HTTP server for webhook endpoints
 - **Execution Tracking**: Full execution history with detailed logging, including input/output for each node
-- **Execution Modes**: Sequential and parallel execution support
+- **Execution Modes**: Sequential and true parallel execution with tokio
 - **Timeout Configuration**: Configurable timeouts at workflow and node level
+- **JSON Schema Support**: All node types expose JSON schemas for parameter validation
+- **Sub-Workflows**: Execute workflows from within other workflows
 - **CLI Interface**: Command-line tool for managing and executing workflows
 
 ## Prerequisites
@@ -169,11 +172,13 @@ edges:
 #### Execution Modes
 
 - **sequential** (default): Nodes execute one at a time in topological order
-- **parallel**: Nodes at the same dependency level can execute concurrently
+- **parallel**: Nodes at the same dependency level execute concurrently using tokio tasks
 
 ```yaml
 execution_mode: parallel
 ```
+
+Parallel mode uses tokio::spawn to execute independent nodes concurrently, improving performance for workflows with parallel branches.
 
 #### Timeout Configuration
 
@@ -378,6 +383,28 @@ Sets workflow variables for use in downstream nodes.
     value: "{{input.field}}"
 ```
 
+### Execute Workflow Node
+
+Executes another workflow as a sub-workflow.
+
+```yaml
+- id: sub_workflow
+  node_type: execute_workflow
+  name: Run Data Processing
+  parameters:
+    workflow_name: "Data Processing Workflow"  # or use workflow_id
+    input:
+      data: "{{input.raw_data}}"
+    wait: true  # Wait for completion (default: true)
+```
+
+Parameters:
+- `workflow_id` or `workflow_name`: Identifier of the workflow to execute
+- `input` (optional): Input data to pass to the sub-workflow
+- `wait` (optional, default: true): Whether to wait for completion
+
+This enables workflow composition and reusability.
+
 ## Examples
 
 See the `examples/` directory for complete workflow examples:
@@ -555,8 +582,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [x] Execution mode configuration (sequential/parallel)
 - [x] Timeout configuration
 - [x] Enhanced execution tracking with input/output
-- [ ] True parallel node execution (currently executes sequentially per level)
-- [ ] Sub-workflows and workflow composition
+- [x] True parallel node execution with tokio
+- [x] JSON Schema support for node parameters
+- [x] Sub-workflows and workflow composition
 - [ ] Error handling and retry logic
 - [ ] Variable interpolation in all node parameters
 - [ ] Authentication and authorization

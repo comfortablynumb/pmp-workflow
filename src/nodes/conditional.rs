@@ -59,6 +59,28 @@ impl Node for ConditionalNode {
 
         Ok(())
     }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string",
+                    "description": "Field path to check (e.g., 'value', 'user.age')"
+                },
+                "operator": {
+                    "type": "string",
+                    "description": "Comparison operator",
+                    "enum": ["eq", "ne", "gt", "lt", "gte", "lte", "contains"]
+                },
+                "value": {
+                    "description": "Value to compare against"
+                }
+            },
+            "required": ["field", "operator", "value"],
+            "additionalProperties": false
+        })
+    }
 }
 
 fn extract_field(data: &serde_json::Value, path: &str) -> anyhow::Result<serde_json::Value> {

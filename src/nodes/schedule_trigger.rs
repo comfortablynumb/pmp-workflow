@@ -57,6 +57,30 @@ impl Node for ScheduleTriggerNode {
 
         Ok(())
     }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "cron": {
+                    "type": "string",
+                    "description": "Cron expression in 6-field format: second minute hour day-of-month month day-of-week (e.g., '0 0 0 * * *' for daily at midnight)",
+                    "pattern": "^[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9A-Z*,/-]+$"
+                },
+                "timezone": {
+                    "type": "string",
+                    "description": "Timezone for schedule execution",
+                    "default": "UTC"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description of this schedule trigger"
+                }
+            },
+            "required": ["cron"],
+            "additionalProperties": false
+        })
+    }
 }
 
 #[cfg(test)]

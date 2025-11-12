@@ -40,6 +40,23 @@ impl Node for ManualTriggerNode {
         let _params: ManualTriggerParams = serde_json::from_value(parameters.clone())?;
         Ok(())
     }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "Description of this manual trigger"
+                },
+                "input_schema": {
+                    "type": "object",
+                    "description": "JSON Schema defining the expected input data when manually triggering this workflow"
+                }
+            },
+            "additionalProperties": false
+        })
+    }
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 /// Status of a workflow execution
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
 #[sqlx(type_name = "execution_status", rename_all = "lowercase")]
 pub enum ExecutionStatus {
     Running,
@@ -193,7 +193,9 @@ mod tests {
         assert!(execution.updated_at <= now);
 
         // Verify started_at and updated_at are close
-        let diff = (execution.updated_at - execution.started_at).num_seconds().abs();
+        let diff = (execution.updated_at - execution.started_at)
+            .num_seconds()
+            .abs();
         assert!(diff < 1, "updated_at and started_at should be very close");
     }
 
@@ -208,7 +210,9 @@ mod tests {
         assert!(node_exec.updated_at <= now);
 
         // Verify started_at and updated_at are close
-        let diff = (node_exec.updated_at - node_exec.started_at).num_seconds().abs();
+        let diff = (node_exec.updated_at - node_exec.started_at)
+            .num_seconds()
+            .abs();
         assert!(diff < 1, "updated_at and started_at should be very close");
     }
 }

@@ -1,4 +1,5 @@
 pub mod conditional;
+pub mod execute_workflow;
 pub mod http_request;
 pub mod manual_trigger;
 pub mod schedule_trigger;
@@ -8,6 +9,7 @@ pub mod transform;
 pub mod webhook_trigger;
 
 pub use conditional::ConditionalNode;
+pub use execute_workflow::ExecuteWorkflowNode;
 pub use http_request::HttpRequestNode;
 pub use manual_trigger::ManualTriggerNode;
 pub use schedule_trigger::ScheduleTriggerNode;
@@ -17,9 +19,10 @@ pub use transform::TransformNode;
 pub use webhook_trigger::WebhookTriggerNode;
 
 use crate::models::NodeRegistry;
+use sqlx::PgPool;
 
 /// Register all built-in node types
-pub fn register_builtin_nodes(registry: &mut NodeRegistry) {
+pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     // Legacy start node
     registry.register("start", || Box::new(StartNode));
 
@@ -33,4 +36,10 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry) {
     registry.register("transform", || Box::new(TransformNode));
     registry.register("conditional", || Box::new(ConditionalNode));
     registry.register("set_variable", || Box::new(SetVariableNode));
+
+    // Sub-workflow execution (requires dependencies)
+    let pool_clone = pool.clone();
+    registry.register("execute_workflow", move || {
+        Box::new(ExecuteWorkflowNode::new(pool_clone.clone()))
+    });
 }

@@ -95,6 +95,16 @@ pub trait Node: Send + Sync {
     fn validate_parameters(&self, _parameters: &serde_json::Value) -> anyhow::Result<()> {
         Ok(())
     }
+
+    /// Get the JSON schema for the node's parameters
+    /// Returns a JSON Schema object describing the expected parameters
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+        })
+    }
 }
 
 /// Factory for creating node instances

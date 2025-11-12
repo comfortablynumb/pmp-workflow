@@ -129,7 +129,7 @@ async fn trigger_webhook(
     }
 
     // Execute the workflow
-    let registry = create_node_registry();
+    let registry = create_node_registry(&state.pool);
     let executor = WorkflowExecutor::new(state.pool.clone(), registry);
 
     let input_data = if payload.data.is_null() {

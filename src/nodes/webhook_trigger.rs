@@ -52,6 +52,25 @@ impl Node for WebhookTriggerNode {
 
         Ok(())
     }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "method": {
+                    "type": "string",
+                    "description": "HTTP method for the webhook endpoint",
+                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                    "default": "POST"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description of this webhook trigger"
+                }
+            },
+            "additionalProperties": false
+        })
+    }
 }
 
 #[cfg(test)]

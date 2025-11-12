@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
             };
 
             // Create executor
-            let registry = create_node_registry();
+            let registry = create_node_registry(&pool);
             let executor = WorkflowExecutor::new(pool.clone(), registry);
 
             // Try to parse as UUID first, otherwise treat as name
