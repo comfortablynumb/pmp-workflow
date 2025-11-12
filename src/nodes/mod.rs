@@ -3,6 +3,7 @@ pub mod conditional;
 pub mod database_query;
 pub mod execute_workflow;
 pub mod gemini;
+pub mod gmail;
 pub mod http_request;
 pub mod manual_trigger;
 pub mod openai;
@@ -10,6 +11,7 @@ pub mod redis;
 pub mod s3;
 pub mod schedule_trigger;
 pub mod set_variable;
+pub mod slack;
 pub mod start;
 pub mod transform;
 pub mod webhook_trigger;
@@ -19,6 +21,7 @@ pub use conditional::ConditionalNode;
 pub use database_query::DatabaseQueryNode;
 pub use execute_workflow::ExecuteWorkflowNode;
 pub use gemini::GeminiNode;
+pub use gmail::GmailNode;
 pub use http_request::HttpRequestNode;
 pub use manual_trigger::ManualTriggerNode;
 pub use openai::OpenAINode;
@@ -26,6 +29,7 @@ pub use redis::RedisNode;
 pub use s3::S3Node;
 pub use schedule_trigger::ScheduleTriggerNode;
 pub use set_variable::SetVariableNode;
+pub use slack::SlackNode;
 pub use start::StartNode;
 pub use transform::TransformNode;
 pub use webhook_trigger::WebhookTriggerNode;
@@ -56,6 +60,10 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("openai", || Box::new(OpenAINode::new()));
     registry.register("gemini", || Box::new(GeminiNode::new()));
     registry.register("bedrock", || Box::new(BedrockNode::new()));
+
+    // Communication nodes
+    registry.register("slack", || Box::new(SlackNode::new()));
+    registry.register("gmail", || Box::new(GmailNode::new()));
 
     // Sub-workflow execution (requires dependencies)
     let pool_clone = pool.clone();

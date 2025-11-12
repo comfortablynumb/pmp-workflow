@@ -110,6 +110,8 @@ pub enum NodeSubcategory {
     Storage,
     /// AI/LLM operations (OpenAI, Gemini, Bedrock, etc.)
     AI,
+    /// Communication operations (Slack, Gmail, Email, etc.)
+    Communication,
     /// Workflow execution actions
     Workflow,
     /// Variable management actions
