@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -20,6 +20,10 @@ impl NodeType for TransformNode {
 
     fn category(&self) -> NodeCategory {
         NodeCategory::Action
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::Transform
     }
 
     fn parameter_schema(&self) -> serde_json::Value {

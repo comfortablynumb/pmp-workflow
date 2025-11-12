@@ -1,4 +1,5 @@
 pub mod conditional;
+pub mod database_query;
 pub mod execute_workflow;
 pub mod http_request;
 pub mod manual_trigger;
@@ -9,6 +10,7 @@ pub mod transform;
 pub mod webhook_trigger;
 
 pub use conditional::ConditionalNode;
+pub use database_query::DatabaseQueryNode;
 pub use execute_workflow::ExecuteWorkflowNode;
 pub use http_request::HttpRequestNode;
 pub use manual_trigger::ManualTriggerNode;
@@ -36,6 +38,7 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("transform", || Box::new(TransformNode));
     registry.register("conditional", || Box::new(ConditionalNode));
     registry.register("set_variable", || Box::new(SetVariableNode));
+    registry.register("database_query", || Box::new(DatabaseQueryNode::new()));
 
     // Sub-workflow execution (requires dependencies)
     let pool_clone = pool.clone();

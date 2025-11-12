@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory, NodeType};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +27,10 @@ impl NodeType for HttpRequestNode {
 
     fn category(&self) -> NodeCategory {
         NodeCategory::Action
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::Http
     }
 
     fn parameter_schema(&self) -> serde_json::Value {
