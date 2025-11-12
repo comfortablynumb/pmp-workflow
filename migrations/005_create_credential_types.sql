@@ -209,4 +209,120 @@ INSERT INTO credential_types (id, name, description, json_schema) VALUES
         },
         "required": ["username", "password"]
     }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000011',
+    'google_drive_oauth',
+    'Google Drive OAuth2 Credentials',
+    '{
+        "type": "object",
+        "properties": {
+            "client_id": {
+                "type": "string",
+                "description": "OAuth2 Client ID"
+            },
+            "client_secret": {
+                "type": "string",
+                "description": "OAuth2 Client Secret"
+            },
+            "refresh_token": {
+                "type": "string",
+                "description": "OAuth2 Refresh Token"
+            },
+            "access_token": {
+                "type": "string",
+                "description": "OAuth2 Access Token (can be refreshed)"
+            }
+        },
+        "required": ["client_id", "client_secret", "refresh_token"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000012',
+    'dropbox_oauth',
+    'Dropbox OAuth2 Token',
+    '{
+        "type": "object",
+        "properties": {
+            "access_token": {
+                "type": "string",
+                "description": "Dropbox OAuth2 Access Token"
+            },
+            "refresh_token": {
+                "type": "string",
+                "description": "Optional Refresh Token for long-lived access"
+            }
+        },
+        "required": ["access_token"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000013',
+    'telegram_bot_token',
+    'Telegram Bot Token',
+    '{
+        "type": "object",
+        "properties": {
+            "bot_token": {
+                "type": "string",
+                "description": "Telegram Bot API Token"
+            }
+        },
+        "required": ["bot_token"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000014',
+    'twilio_api_key',
+    'Twilio API Credentials',
+    '{
+        "type": "object",
+        "properties": {
+            "account_sid": {
+                "type": "string",
+                "description": "Twilio Account SID"
+            },
+            "auth_token": {
+                "type": "string",
+                "description": "Twilio Auth Token"
+            }
+        },
+        "required": ["account_sid", "auth_token"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000015',
+    'ftp_credentials',
+    'FTP/SFTP Credentials',
+    '{
+        "type": "object",
+        "properties": {
+            "host": {
+                "type": "string",
+                "description": "FTP/SFTP server hostname"
+            },
+            "port": {
+                "type": "integer",
+                "description": "Port number (default: 21 for FTP, 22 for SFTP)"
+            },
+            "username": {
+                "type": "string",
+                "description": "Username"
+            },
+            "password": {
+                "type": "string",
+                "description": "Password"
+            },
+            "protocol": {
+                "type": "string",
+                "description": "Protocol: ftp, ftps, or sftp",
+                "enum": ["ftp", "ftps", "sftp"]
+            },
+            "private_key": {
+                "type": "string",
+                "description": "Private key for SFTP (alternative to password)"
+            }
+        },
+        "required": ["host", "username", "protocol"]
+    }'::jsonb
 );

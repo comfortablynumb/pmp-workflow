@@ -1,11 +1,14 @@
 pub mod bedrock;
 pub mod conditional;
 pub mod database_query;
+pub mod dropbox;
 pub mod execute_workflow;
+pub mod ftp;
 pub mod gemini;
 pub mod github;
 pub mod gitlab;
 pub mod gmail;
+pub mod google_drive;
 pub mod http_request;
 pub mod manual_trigger;
 pub mod openai;
@@ -15,17 +18,22 @@ pub mod schedule_trigger;
 pub mod set_variable;
 pub mod slack;
 pub mod start;
+pub mod telegram;
 pub mod transform;
+pub mod twilio;
 pub mod webhook_trigger;
 
 pub use bedrock::BedrockNode;
 pub use conditional::ConditionalNode;
 pub use database_query::DatabaseQueryNode;
+pub use dropbox::DropboxNode;
 pub use execute_workflow::ExecuteWorkflowNode;
+pub use ftp::FtpNode;
 pub use gemini::GeminiNode;
 pub use github::GitHubNode;
 pub use gitlab::GitLabNode;
 pub use gmail::GmailNode;
+pub use google_drive::GoogleDriveNode;
 pub use http_request::HttpRequestNode;
 pub use manual_trigger::ManualTriggerNode;
 pub use openai::OpenAINode;
@@ -35,7 +43,9 @@ pub use schedule_trigger::ScheduleTriggerNode;
 pub use set_variable::SetVariableNode;
 pub use slack::SlackNode;
 pub use start::StartNode;
+pub use telegram::TelegramNode;
 pub use transform::TransformNode;
+pub use twilio::TwilioNode;
 pub use webhook_trigger::WebhookTriggerNode;
 
 use crate::models::NodeRegistry;
@@ -68,10 +78,17 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     // Communication nodes
     registry.register("slack", || Box::new(SlackNode::new()));
     registry.register("gmail", || Box::new(GmailNode::new()));
+    registry.register("telegram", || Box::new(TelegramNode::new()));
+    registry.register("twilio", || Box::new(TwilioNode::new()));
 
     // Developer tools
     registry.register("github", || Box::new(GitHubNode::new()));
     registry.register("gitlab", || Box::new(GitLabNode::new()));
+
+    // Storage/File operations
+    registry.register("google_drive", || Box::new(GoogleDriveNode::new()));
+    registry.register("dropbox", || Box::new(DropboxNode::new()));
+    registry.register("ftp", || Box::new(FtpNode::new()));
 
     // Sub-workflow execution (requires dependencies)
     let pool_clone = pool.clone();
