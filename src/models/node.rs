@@ -142,6 +142,13 @@ pub trait NodeType {
             "additionalProperties": true
         })
     }
+
+    /// Get the required credential type name for this node
+    /// Returns None if the node doesn't require credentials
+    /// Returns Some(credential_type_name) if the node requires a specific credential type
+    fn required_credential_type(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// Trait that all nodes must implement for execution

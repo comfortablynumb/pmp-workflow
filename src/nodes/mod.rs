@@ -3,6 +3,8 @@ pub mod conditional;
 pub mod database_query;
 pub mod execute_workflow;
 pub mod gemini;
+pub mod github;
+pub mod gitlab;
 pub mod gmail;
 pub mod http_request;
 pub mod manual_trigger;
@@ -21,6 +23,8 @@ pub use conditional::ConditionalNode;
 pub use database_query::DatabaseQueryNode;
 pub use execute_workflow::ExecuteWorkflowNode;
 pub use gemini::GeminiNode;
+pub use github::GitHubNode;
+pub use gitlab::GitLabNode;
 pub use gmail::GmailNode;
 pub use http_request::HttpRequestNode;
 pub use manual_trigger::ManualTriggerNode;
@@ -64,6 +68,10 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     // Communication nodes
     registry.register("slack", || Box::new(SlackNode::new()));
     registry.register("gmail", || Box::new(GmailNode::new()));
+
+    // Developer tools
+    registry.register("github", || Box::new(GitHubNode::new()));
+    registry.register("gitlab", || Box::new(GitLabNode::new()));
 
     // Sub-workflow execution (requires dependencies)
     let pool_clone = pool.clone();
