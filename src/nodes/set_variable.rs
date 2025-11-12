@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -13,12 +13,36 @@ struct SetVariableParams {
 /// Set Variable node - sets workflow variables
 pub struct SetVariableNode;
 
-#[async_trait]
-impl Node for SetVariableNode {
-    fn node_type(&self) -> &str {
+impl NodeType for SetVariableNode {
+    fn type_name(&self) -> &str {
         "set_variable"
     }
 
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Action
+    }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Variable name to set",
+                    "minLength": 1
+                },
+                "value": {
+                    "description": "Value to set. Can be a literal value or use {{field}} syntax to reference input fields"
+                }
+            },
+            "required": ["name", "value"],
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for SetVariableNode {
     async fn execute(
         &self,
         context: &NodeContext,
@@ -50,24 +74,6 @@ impl Node for SetVariableNode {
         }
 
         Ok(())
-    }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Variable name to set",
-                    "minLength": 1
-                },
-                "value": {
-                    "description": "Value to set. Can be a literal value or use {{field}} syntax to reference input fields"
-                }
-            },
-            "required": ["name", "value"],
-            "additionalProperties": false
-        })
     }
 }
 

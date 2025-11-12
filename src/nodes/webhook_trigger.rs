@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -18,12 +18,37 @@ fn default_method() -> String {
 /// Webhook Trigger node - starts workflow via HTTP webhook
 pub struct WebhookTriggerNode;
 
-#[async_trait]
-impl Node for WebhookTriggerNode {
-    fn node_type(&self) -> &str {
+impl NodeType for WebhookTriggerNode {
+    fn type_name(&self) -> &str {
         "webhook_trigger"
     }
 
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Trigger
+    }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "method": {
+                    "type": "string",
+                    "description": "HTTP method for the webhook endpoint",
+                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                    "default": "POST"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description of this webhook trigger"
+                }
+            },
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for WebhookTriggerNode {
     async fn execute(
         &self,
         context: &NodeContext,
@@ -51,25 +76,6 @@ impl Node for WebhookTriggerNode {
         }
 
         Ok(())
-    }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "method": {
-                    "type": "string",
-                    "description": "HTTP method for the webhook endpoint",
-                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
-                    "default": "POST"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Description of this webhook trigger"
-                }
-            },
-            "additionalProperties": false
-        })
     }
 }
 
@@ -112,5 +118,14 @@ mod tests {
             "method": "INVALID"
         });
         assert!(node.validate_parameters(&invalid_params).is_err());
+    }
+
+    #[test]
+    fn test_webhook_trigger_category() {
+        use crate::models::NodeCategory;
+
+        let node = WebhookTriggerNode;
+        assert_eq!(node.category(), NodeCategory::Trigger);
+        assert_eq!(node.type_name(), "webhook_trigger");
     }
 }

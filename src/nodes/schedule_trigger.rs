@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use cron::Schedule;
 use serde::Deserialize;
@@ -25,12 +25,42 @@ fn default_timezone() -> String {
 /// Actual scheduling is handled externally.
 pub struct ScheduleTriggerNode;
 
-#[async_trait]
-impl Node for ScheduleTriggerNode {
-    fn node_type(&self) -> &str {
+impl NodeType for ScheduleTriggerNode {
+    fn type_name(&self) -> &str {
         "schedule_trigger"
     }
 
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Trigger
+    }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "cron": {
+                    "type": "string",
+                    "description": "Cron expression in 6-field format: second minute hour day-of-month month day-of-week (e.g., '0 0 0 * * *' for daily at midnight)",
+                    "pattern": "^[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9A-Z*,/-]+$"
+                },
+                "timezone": {
+                    "type": "string",
+                    "description": "Timezone for schedule execution",
+                    "default": "UTC"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description of this schedule trigger"
+                }
+            },
+            "required": ["cron"],
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for ScheduleTriggerNode {
     async fn execute(
         &self,
         context: &NodeContext,
@@ -56,30 +86,6 @@ impl Node for ScheduleTriggerNode {
             .map_err(|e| anyhow::anyhow!("Invalid cron expression '{}': {}", params.cron, e))?;
 
         Ok(())
-    }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "cron": {
-                    "type": "string",
-                    "description": "Cron expression in 6-field format: second minute hour day-of-month month day-of-week (e.g., '0 0 0 * * *' for daily at midnight)",
-                    "pattern": "^[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9A-Z*,/-]+$"
-                },
-                "timezone": {
-                    "type": "string",
-                    "description": "Timezone for schedule execution",
-                    "default": "UTC"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Description of this schedule trigger"
-                }
-            },
-            "required": ["cron"],
-            "additionalProperties": false
-        })
     }
 }
 
@@ -155,5 +161,14 @@ mod tests {
                 cron_expr
             );
         }
+    }
+
+    #[test]
+    fn test_schedule_trigger_category() {
+        use crate::models::NodeCategory;
+
+        let node = ScheduleTriggerNode;
+        assert_eq!(node.category(), NodeCategory::Trigger);
+        assert_eq!(node.type_name(), "schedule_trigger");
     }
 }

@@ -78,12 +78,39 @@ impl NodeContext {
     }
 }
 
-/// Trait that all node types must implement
-#[async_trait]
-pub trait Node: Send + Sync {
-    /// Get the node type identifier
-    fn node_type(&self) -> &str;
+/// Node category - determines if a node is a trigger or action
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeCategory {
+    /// Trigger nodes - can be used as the first node in a workflow
+    /// Examples: manual_trigger, webhook_trigger, schedule_trigger
+    Trigger,
+    /// Action nodes - execute actions within a workflow
+    /// Examples: http_request, transform, conditional
+    Action,
+}
 
+/// Trait defining a node type with metadata
+pub trait NodeType {
+    /// Get the node type identifier (e.g., "http_request", "transform")
+    fn type_name(&self) -> &str;
+
+    /// Get the category of this node (Trigger or Action)
+    fn category(&self) -> NodeCategory;
+
+    /// Get the JSON schema for the node's parameters
+    /// Returns a JSON Schema object describing the expected parameters
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+        })
+    }
+}
+
+/// Trait that all nodes must implement for execution
+#[async_trait]
+pub trait Node: NodeType + Send + Sync {
     /// Execute the node with the given context and parameters
     async fn execute(
         &self,
@@ -94,16 +121,6 @@ pub trait Node: Send + Sync {
     /// Validate node parameters (optional)
     fn validate_parameters(&self, _parameters: &serde_json::Value) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    /// Get the JSON schema for the node's parameters
-    /// Returns a JSON Schema object describing the expected parameters
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {},
-            "additionalProperties": true
-        })
     }
 }
 
@@ -213,12 +230,18 @@ mod tests {
 
     struct TestNode;
 
-    #[async_trait]
-    impl Node for TestNode {
-        fn node_type(&self) -> &str {
+    impl NodeType for TestNode {
+        fn type_name(&self) -> &str {
             "test_node"
         }
 
+        fn category(&self) -> NodeCategory {
+            NodeCategory::Action
+        }
+    }
+
+    #[async_trait]
+    impl Node for TestNode {
         async fn execute(
             &self,
             _context: &NodeContext,
@@ -240,9 +263,88 @@ mod tests {
 
         let node = registry.create("test_node");
         assert!(node.is_ok());
-        assert_eq!(node.unwrap().node_type(), "test_node");
+        assert_eq!(node.unwrap().type_name(), "test_node");
 
         let invalid = registry.create("invalid");
         assert!(invalid.is_err());
+    }
+
+    #[test]
+    fn test_node_category_enum() {
+        // Test that categories are different
+        assert_ne!(NodeCategory::Trigger, NodeCategory::Action);
+
+        // Test Debug trait
+        assert_eq!(format!("{:?}", NodeCategory::Trigger), "Trigger");
+        assert_eq!(format!("{:?}", NodeCategory::Action), "Action");
+
+        // Test Copy trait
+        let cat = NodeCategory::Trigger;
+        let cat2 = cat;
+        assert_eq!(cat, cat2);
+    }
+
+    #[test]
+    fn test_node_category_assignment() {
+        // Test that test node has correct category
+        let node = TestNode;
+        assert_eq!(node.category(), NodeCategory::Action);
+    }
+
+    // Test trigger node
+    struct TestTriggerNode;
+
+    impl NodeType for TestTriggerNode {
+        fn type_name(&self) -> &str {
+            "test_trigger"
+        }
+
+        fn category(&self) -> NodeCategory {
+            NodeCategory::Trigger
+        }
+    }
+
+    #[async_trait]
+    impl Node for TestTriggerNode {
+        async fn execute(
+            &self,
+            _context: &NodeContext,
+            _parameters: &serde_json::Value,
+        ) -> anyhow::Result<NodeOutput> {
+            Ok(NodeOutput::success(serde_json::json!({"test": true})))
+        }
+    }
+
+    #[test]
+    fn test_trigger_vs_action_categories() {
+        let action_node = TestNode;
+        let trigger_node = TestTriggerNode;
+
+        // Verify categories
+        assert_eq!(action_node.category(), NodeCategory::Action);
+        assert_eq!(trigger_node.category(), NodeCategory::Trigger);
+        assert_ne!(action_node.category(), trigger_node.category());
+    }
+
+    #[test]
+    fn test_node_category_serialization() {
+        use serde_json;
+
+        // Test serialization
+        let trigger = NodeCategory::Trigger;
+        let action = NodeCategory::Action;
+
+        let trigger_json = serde_json::to_string(&trigger).unwrap();
+        let action_json = serde_json::to_string(&action).unwrap();
+
+        assert_eq!(trigger_json, "\"Trigger\"");
+        assert_eq!(action_json, "\"Action\"");
+
+        // Test deserialization
+        let deserialized_trigger: NodeCategory = serde_json::from_str(&trigger_json).unwrap();
+        let deserialized_action: NodeCategory = serde_json::from_str(&action_json).unwrap();
+
+        assert_eq!(deserialized_trigger, NodeCategory::Trigger);
+        assert_eq!(deserialized_action, NodeCategory::Action);
     }
 }

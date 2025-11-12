@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -13,12 +13,35 @@ pub struct ManualTriggerParams {
 /// Manual Trigger node - starts workflow via manual execution (CLI or API)
 pub struct ManualTriggerNode;
 
-#[async_trait]
-impl Node for ManualTriggerNode {
-    fn node_type(&self) -> &str {
+impl NodeType for ManualTriggerNode {
+    fn type_name(&self) -> &str {
         "manual_trigger"
     }
 
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Trigger
+    }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "Description of this manual trigger"
+                },
+                "input_schema": {
+                    "type": "object",
+                    "description": "JSON Schema defining the expected input data when manually triggering this workflow"
+                }
+            },
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for ManualTriggerNode {
     async fn execute(
         &self,
         context: &NodeContext,
@@ -39,23 +62,6 @@ impl Node for ManualTriggerNode {
         // Try to deserialize to ensure valid structure
         let _params: ManualTriggerParams = serde_json::from_value(parameters.clone())?;
         Ok(())
-    }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "description": "Description of this manual trigger"
-                },
-                "input_schema": {
-                    "type": "object",
-                    "description": "JSON Schema defining the expected input data when manually triggering this workflow"
-                }
-            },
-            "additionalProperties": false
-        })
     }
 }
 
@@ -121,5 +127,14 @@ mod tests {
 
         let empty_params = serde_json::json!({});
         assert!(node.validate_parameters(&empty_params).is_ok());
+    }
+
+    #[test]
+    fn test_manual_trigger_category() {
+        use crate::models::NodeCategory;
+
+        let node = ManualTriggerNode;
+        assert_eq!(node.category(), NodeCategory::Trigger);
+        assert_eq!(node.type_name(), "manual_trigger");
     }
 }

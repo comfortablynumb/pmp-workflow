@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -20,12 +20,49 @@ struct HttpResponse {
 /// HTTP Request node - makes HTTP requests
 pub struct HttpRequestNode;
 
-#[async_trait]
-impl Node for HttpRequestNode {
-    fn node_type(&self) -> &str {
+impl NodeType for HttpRequestNode {
+    fn type_name(&self) -> &str {
         "http_request"
     }
 
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Action
+    }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to send the HTTP request to",
+                    "minLength": 1
+                },
+                "method": {
+                    "type": "string",
+                    "description": "HTTP method",
+                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                    "default": "GET"
+                },
+                "headers": {
+                    "type": "object",
+                    "description": "HTTP headers to include in the request",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "body": {
+                    "description": "Request body (for POST, PUT, PATCH methods)"
+                }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for HttpRequestNode {
     async fn execute(
         &self,
         _context: &NodeContext,
@@ -109,36 +146,5 @@ impl Node for HttpRequestNode {
         }
 
         Ok(())
-    }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The URL to send the HTTP request to",
-                    "minLength": 1
-                },
-                "method": {
-                    "type": "string",
-                    "description": "HTTP method",
-                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
-                    "default": "GET"
-                },
-                "headers": {
-                    "type": "object",
-                    "description": "HTTP headers to include in the request",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "body": {
-                    "description": "Request body (for POST, PUT, PATCH methods)"
-                }
-            },
-            "required": ["url"],
-            "additionalProperties": false
-        })
     }
 }
