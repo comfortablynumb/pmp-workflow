@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput};
+use crate::models::{Node, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -15,12 +15,36 @@ struct ConditionalParams {
 /// Conditional node - evaluates conditions and returns result
 pub struct ConditionalNode;
 
-#[async_trait]
-impl Node for ConditionalNode {
-    fn node_type(&self) -> &str {
+impl NodeType for ConditionalNode {
+    fn type_name(&self) -> &str {
         "conditional"
     }
 
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string",
+                    "description": "Field path to check (e.g., 'value', 'user.age')"
+                },
+                "operator": {
+                    "type": "string",
+                    "description": "Comparison operator",
+                    "enum": ["eq", "ne", "gt", "lt", "gte", "lte", "contains"]
+                },
+                "value": {
+                    "description": "Value to compare against"
+                }
+            },
+            "required": ["field", "operator", "value"],
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for ConditionalNode {
     async fn execute(
         &self,
         context: &NodeContext,
@@ -59,28 +83,6 @@ impl Node for ConditionalNode {
 
         Ok(())
     }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string",
-                    "description": "Field path to check (e.g., 'value', 'user.age')"
-                },
-                "operator": {
-                    "type": "string",
-                    "description": "Comparison operator",
-                    "enum": ["eq", "ne", "gt", "lt", "gte", "lte", "contains"]
-                },
-                "value": {
-                    "description": "Value to compare against"
-                }
-            },
-            "required": ["field", "operator", "value"],
-            "additionalProperties": false
-        })
-    }
 }
 
 fn extract_field(data: &serde_json::Value, path: &str) -> anyhow::Result<serde_json::Value> {
@@ -102,55 +104,45 @@ fn extract_field(data: &serde_json::Value, path: &str) -> anyhow::Result<serde_j
 fn evaluate_condition(
     field_value: &serde_json::Value,
     operator: &str,
-    compare_value: &serde_json::Value,
+    expected: &serde_json::Value,
 ) -> anyhow::Result<bool> {
     match operator {
-        "eq" => Ok(field_value == compare_value),
-        "ne" => Ok(field_value != compare_value),
+        "eq" => Ok(field_value == expected),
+        "ne" => Ok(field_value != expected),
         "gt" => {
-            let a = field_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
-            Ok(a > b)
+            if let (Some(a), Some(b)) = (field_value.as_f64(), expected.as_f64()) {
+                Ok(a > b)
+            } else {
+                anyhow::bail!("Cannot compare non-numeric values with gt operator")
+            }
         }
         "lt" => {
-            let a = field_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
-            Ok(a < b)
+            if let (Some(a), Some(b)) = (field_value.as_f64(), expected.as_f64()) {
+                Ok(a < b)
+            } else {
+                anyhow::bail!("Cannot compare non-numeric values with lt operator")
+            }
         }
         "gte" => {
-            let a = field_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
-            Ok(a >= b)
+            if let (Some(a), Some(b)) = (field_value.as_f64(), expected.as_f64()) {
+                Ok(a >= b)
+            } else {
+                anyhow::bail!("Cannot compare non-numeric values with gte operator")
+            }
         }
         "lte" => {
-            let a = field_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value
-                .as_f64()
-                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
-            Ok(a <= b)
+            if let (Some(a), Some(b)) = (field_value.as_f64(), expected.as_f64()) {
+                Ok(a <= b)
+            } else {
+                anyhow::bail!("Cannot compare non-numeric values with lte operator")
+            }
         }
         "contains" => {
-            let a = field_value
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Field is not a string"))?;
-            let b = compare_value
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Compare value is not a string"))?;
-            Ok(a.contains(b))
+            if let (Some(haystack), Some(needle)) = (field_value.as_str(), expected.as_str()) {
+                Ok(haystack.contains(needle))
+            } else {
+                anyhow::bail!("Contains operator requires string values")
+            }
         }
         _ => anyhow::bail!("Unknown operator: {}", operator),
     }
@@ -162,19 +154,29 @@ mod tests {
 
     #[test]
     fn test_evaluate_condition() {
-        let value = serde_json::json!(42);
-        let compare = serde_json::json!(40);
+        // Test equality
+        assert!(evaluate_condition(&serde_json::json!(5), "eq", &serde_json::json!(5)).unwrap());
+        assert!(!evaluate_condition(&serde_json::json!(5), "eq", &serde_json::json!(10)).unwrap());
 
-        assert!(evaluate_condition(&value, "gt", &compare).unwrap());
-        assert!(!evaluate_condition(&value, "lt", &compare).unwrap());
-        assert!(!evaluate_condition(&value, "eq", &compare).unwrap());
+        // Test greater than
+        assert!(evaluate_condition(&serde_json::json!(10), "gt", &serde_json::json!(5)).unwrap());
+        assert!(!evaluate_condition(&serde_json::json!(5), "gt", &serde_json::json!(10)).unwrap());
     }
 
     #[test]
     fn test_string_contains() {
-        let value = serde_json::json!("hello world");
-        let compare = serde_json::json!("world");
+        assert!(evaluate_condition(
+            &serde_json::json!("hello world"),
+            "contains",
+            &serde_json::json!("world")
+        )
+        .unwrap());
 
-        assert!(evaluate_condition(&value, "contains", &compare).unwrap());
+        assert!(!evaluate_condition(
+            &serde_json::json!("hello world"),
+            "contains",
+            &serde_json::json!("foo")
+        )
+        .unwrap());
     }
 }

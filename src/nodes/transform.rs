@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput};
+use crate::models::{Node, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -13,12 +13,38 @@ struct TransformParams {
 /// Transform node - transforms data
 pub struct TransformNode;
 
-#[async_trait]
-impl Node for TransformNode {
-    fn node_type(&self) -> &str {
+impl NodeType for TransformNode {
+    fn type_name(&self) -> &str {
         "transform"
     }
 
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string",
+                    "description": "JSON path expression to extract a field (e.g., 'user.name' or 'items[0].id')"
+                },
+                "template": {
+                    "description": "JSON template for transformation. Use {{field}} syntax for substitution, {{$variable}} for workflow variables"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": ["expression"]
+                },
+                {
+                    "required": ["template"]
+                }
+            ],
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for TransformNode {
     async fn execute(
         &self,
         context: &NodeContext,
@@ -45,30 +71,6 @@ impl Node for TransformNode {
 
         // If no transformation specified, pass through
         Ok(NodeOutput::success(input))
-    }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "expression": {
-                    "type": "string",
-                    "description": "JSON path expression to extract a field (e.g., 'user.name' or 'items[0].id')"
-                },
-                "template": {
-                    "description": "JSON template for transformation. Use {{field}} syntax for substitution, {{$variable}} for workflow variables"
-                }
-            },
-            "oneOf": [
-                {
-                    "required": ["expression"]
-                },
-                {
-                    "required": ["template"]
-                }
-            ],
-            "additionalProperties": false
-        })
     }
 }
 

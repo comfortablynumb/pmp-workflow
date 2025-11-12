@@ -1,6 +1,6 @@
 use crate::db;
 use crate::execution::WorkflowEngine;
-use crate::models::{Node, NodeContext, NodeOutput, NodeRegistry};
+use crate::models::{Node, NodeContext, NodeOutput, NodeRegistry, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -34,12 +34,48 @@ impl ExecuteWorkflowNode {
     }
 }
 
-#[async_trait]
-impl Node for ExecuteWorkflowNode {
-    fn node_type(&self) -> &str {
+impl NodeType for ExecuteWorkflowNode {
+    fn type_name(&self) -> &str {
         "execute_workflow"
     }
 
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "workflow_id": {
+                    "type": "string",
+                    "description": "UUID of the workflow to execute",
+                    "format": "uuid"
+                },
+                "workflow_name": {
+                    "type": "string",
+                    "description": "Name of the workflow to execute (alternative to workflow_id)"
+                },
+                "input": {
+                    "description": "Input data to pass to the sub-workflow. If not specified, passes through the current node's input."
+                },
+                "wait": {
+                    "type": "boolean",
+                    "description": "Whether to wait for the sub-workflow to complete",
+                    "default": true
+                }
+            },
+            "oneOf": [
+                {
+                    "required": ["workflow_id"]
+                },
+                {
+                    "required": ["workflow_name"]
+                }
+            ],
+            "additionalProperties": false
+        })
+    }
+}
+
+#[async_trait]
+impl Node for ExecuteWorkflowNode {
     async fn execute(
         &self,
         context: &NodeContext,
@@ -145,40 +181,6 @@ impl Node for ExecuteWorkflowNode {
         }
 
         Ok(())
-    }
-
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "workflow_id": {
-                    "type": "string",
-                    "description": "UUID of the workflow to execute",
-                    "format": "uuid"
-                },
-                "workflow_name": {
-                    "type": "string",
-                    "description": "Name of the workflow to execute (alternative to workflow_id)"
-                },
-                "input": {
-                    "description": "Input data to pass to the sub-workflow. If not specified, passes through the current node's input."
-                },
-                "wait": {
-                    "type": "boolean",
-                    "description": "Whether to wait for the sub-workflow to complete",
-                    "default": true
-                }
-            },
-            "oneOf": [
-                {
-                    "required": ["workflow_id"]
-                },
-                {
-                    "required": ["workflow_name"]
-                }
-            ],
-            "additionalProperties": false
-        })
     }
 }
 

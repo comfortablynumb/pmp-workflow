@@ -78,12 +78,25 @@ impl NodeContext {
     }
 }
 
-/// Trait that all node types must implement
-#[async_trait]
-pub trait Node: Send + Sync {
-    /// Get the node type identifier
-    fn node_type(&self) -> &str;
+/// Trait defining a node type with metadata
+pub trait NodeType {
+    /// Get the node type identifier (e.g., "http_request", "transform")
+    fn type_name(&self) -> &str;
 
+    /// Get the JSON schema for the node's parameters
+    /// Returns a JSON Schema object describing the expected parameters
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+        })
+    }
+}
+
+/// Trait that all nodes must implement for execution
+#[async_trait]
+pub trait Node: NodeType + Send + Sync {
     /// Execute the node with the given context and parameters
     async fn execute(
         &self,
@@ -94,16 +107,6 @@ pub trait Node: Send + Sync {
     /// Validate node parameters (optional)
     fn validate_parameters(&self, _parameters: &serde_json::Value) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    /// Get the JSON schema for the node's parameters
-    /// Returns a JSON Schema object describing the expected parameters
-    fn parameter_schema(&self) -> serde_json::Value {
-        serde_json::json!({
-            "type": "object",
-            "properties": {},
-            "additionalProperties": true
-        })
     }
 }
 
@@ -213,12 +216,14 @@ mod tests {
 
     struct TestNode;
 
-    #[async_trait]
-    impl Node for TestNode {
-        fn node_type(&self) -> &str {
+    impl NodeType for TestNode {
+        fn type_name(&self) -> &str {
             "test_node"
         }
+    }
 
+    #[async_trait]
+    impl Node for TestNode {
         async fn execute(
             &self,
             _context: &NodeContext,
@@ -240,7 +245,7 @@ mod tests {
 
         let node = registry.create("test_node");
         assert!(node.is_ok());
-        assert_eq!(node.unwrap().node_type(), "test_node");
+        assert_eq!(node.unwrap().type_name(), "test_node");
 
         let invalid = registry.create("invalid");
         assert!(invalid.is_err());
