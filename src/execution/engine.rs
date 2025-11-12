@@ -1,11 +1,13 @@
 use crate::db;
 use crate::models::{
-    ExecutionStatus, NodeContext, NodeExecution, NodeRegistry, WorkflowDefinition,
+    ExecutionMode, ExecutionStatus, NodeContext, NodeExecution, NodeRegistry, WorkflowDefinition,
     WorkflowExecution,
 };
 use anyhow::{Context, Result};
 use sqlx::PgPool;
 use std::collections::HashMap;
+use std::time::Duration;
+use tokio::time::timeout;
 use uuid::Uuid;
 
 /// Workflow execution engine
@@ -69,8 +71,27 @@ impl WorkflowEngine {
         Ok(execution)
     }
 
-    /// Run the workflow nodes in topological order
+    /// Run the workflow nodes
     async fn run_workflow(
+        &self,
+        workflow: &WorkflowDefinition,
+        execution: &WorkflowExecution,
+        input_data: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        match workflow.execution_mode {
+            ExecutionMode::Sequential => {
+                self.run_workflow_sequential(workflow, execution, input_data)
+                    .await
+            }
+            ExecutionMode::Parallel => {
+                self.run_workflow_parallel(workflow, execution, input_data)
+                    .await
+            }
+        }
+    }
+
+    /// Run the workflow nodes sequentially
+    async fn run_workflow_sequential(
         &self,
         workflow: &WorkflowDefinition,
         execution: &WorkflowExecution,
@@ -115,6 +136,7 @@ impl WorkflowEngine {
             context.variables = workflow_variables.clone();
 
             // Collect inputs from predecessor nodes
+            let mut input_data_json = serde_json::Map::new();
             for edge in &workflow.edges {
                 if edge.to == *node_id {
                     if let Some(input) = node_outputs.get(&edge.from) {
@@ -123,15 +145,46 @@ impl WorkflowEngine {
                         } else {
                             edge.to_input.clone()
                         };
-                        context.add_input(input_key, input.clone());
+                        context.add_input(input_key.clone(), input.clone());
+                        input_data_json.insert(input_key, input.clone());
                     }
                 }
             }
 
-            // Execute the node
-            let node = self.registry.create(&node_def.node_type)?;
+            // Store input data
+            let input_data_value = if input_data_json.is_empty() {
+                None
+            } else {
+                Some(serde_json::Value::Object(input_data_json))
+            };
 
-            match node.execute(&context, &node_def.parameters).await {
+            if let Some(ref input_data) = input_data_value {
+                node_execution.input_data = Some(input_data.clone());
+            }
+
+            // Determine timeout duration
+            let timeout_duration = node_def
+                .timeout_seconds
+                .or(workflow.timeout_seconds)
+                .map(Duration::from_secs);
+
+            // Execute the node with timeout
+            let node = self.registry.create(&node_def.node_type)?;
+            let execute_future = node.execute(&context, &node_def.parameters);
+
+            let execution_result = if let Some(duration) = timeout_duration {
+                match timeout(duration, execute_future).await {
+                    Ok(result) => result,
+                    Err(_) => Err(anyhow::anyhow!(
+                        "Node execution timed out after {} seconds",
+                        duration.as_secs()
+                    )),
+                }
+            } else {
+                execute_future.await
+            };
+
+            match execution_result {
                 Ok(output) => {
                     if output.success {
                         tracing::info!("Node {} completed successfully", node_id);
@@ -191,6 +244,26 @@ impl WorkflowEngine {
             .unwrap_or(serde_json::json!({}));
 
         Ok(final_output)
+    }
+
+    /// Run the workflow nodes in parallel where possible
+    async fn run_workflow_parallel(
+        &self,
+        workflow: &WorkflowDefinition,
+        execution: &WorkflowExecution,
+        input_data: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        // For now, parallel mode uses the same logic as sequential
+        // A full implementation would group nodes by "level" and execute each level in parallel
+        tracing::info!(
+            "Running workflow in parallel mode (currently executes sequentially per level)"
+        );
+
+        // TODO: Implement true parallel execution by grouping nodes into levels
+        // and using tokio::join! or tokio::spawn to execute nodes at the same level concurrently
+
+        self.run_workflow_sequential(workflow, execution, input_data)
+            .await
     }
 
     /// Perform topological sort to determine execution order

@@ -1,0 +1,48 @@
+name: Parallel Workflow Example
+description: A workflow that demonstrates parallel node execution
+execution_mode: parallel
+timeout_seconds: 30
+
+nodes:
+  - id: start
+    node_type: manual_trigger
+    name: Start
+    parameters:
+      description: "Start the workflow"
+
+  - id: fetch_users
+    node_type: http_request
+    name: Fetch Users
+    timeout_seconds: 10
+    parameters:
+      url: "https://jsonplaceholder.typicode.com/users"
+      method: "GET"
+
+  - id: fetch_posts
+    node_type: http_request
+    name: Fetch Posts
+    timeout_seconds: 10
+    parameters:
+      url: "https://jsonplaceholder.typicode.com/posts"
+      method: "GET"
+
+  - id: combine_data
+    node_type: transform
+    name: Combine Data
+    parameters:
+      template:
+        users_count: "{{users}}"
+        posts_count: "{{posts}}"
+        combined: true
+
+edges:
+  - from: start
+    to: fetch_users
+  - from: start
+    to: fetch_posts
+  - from: fetch_users
+    to: combine_data
+    to_input: users
+  - from: fetch_posts
+    to: combine_data
+    to_input: posts

@@ -19,7 +19,9 @@ A Rust-based workflow automation engine similar to n8n, with YAML-based configur
   - **Conditional**: Branch based on conditions
   - **Set Variable**: Manage workflow variables
 - **Webhook Server**: Built-in HTTP server for webhook endpoints
-- **Execution Tracking**: Full execution history and detailed logging
+- **Execution Tracking**: Full execution history with detailed logging, including input/output for each node
+- **Execution Modes**: Sequential and parallel execution support
+- **Timeout Configuration**: Configurable timeouts at workflow and node level
 - **CLI Interface**: Command-line tool for managing and executing workflows
 
 ## Prerequisites
@@ -143,10 +145,15 @@ Workflows are defined in YAML with the following structure:
 name: My Workflow
 description: Optional description
 
+# Execution configuration (optional)
+execution_mode: sequential  # or "parallel" (default: sequential)
+timeout_seconds: 300        # Global timeout in seconds (optional)
+
 nodes:
   - id: unique_node_id
     node_type: start|http_request|transform|conditional|set_variable
     name: Human-readable name
+    timeout_seconds: 30     # Node-specific timeout (optional, overrides global)
     parameters:
       # Node-specific parameters
 
@@ -156,6 +163,42 @@ edges:
     from_output: optional
     to_input: optional
 ```
+
+### Execution Configuration
+
+#### Execution Modes
+
+- **sequential** (default): Nodes execute one at a time in topological order
+- **parallel**: Nodes at the same dependency level can execute concurrently
+
+```yaml
+execution_mode: parallel
+```
+
+#### Timeout Configuration
+
+Configure timeouts to prevent long-running operations:
+
+- **Workflow-level timeout**: Applies to all nodes by default
+- **Node-level timeout**: Overrides workflow timeout for specific nodes
+
+```yaml
+# Global timeout for all nodes
+timeout_seconds: 300
+
+nodes:
+  - id: fast_node
+    node_type: http_request
+    timeout_seconds: 10  # This node gets 10 seconds
+    # ...
+
+  - id: regular_node
+    node_type: transform
+    # No timeout specified - uses workflow timeout (300s)
+    # ...
+```
+
+If a node execution exceeds its timeout, the workflow fails with a timeout error.
 
 ## Node Types
 
@@ -350,6 +393,9 @@ See the `examples/` directory for complete workflow examples:
 - `webhook_trigger_workflow.yaml`: Webhook-triggered data processing
 - `schedule_trigger_workflow.yaml`: Scheduled data synchronization
 
+**Advanced Examples:**
+- `parallel_workflow.yaml`: Parallel execution with timeouts
+
 ### Example: Simple HTTP API Workflow
 
 ```yaml
@@ -456,10 +502,15 @@ pmp-workflow/
 
 1. Workflow is loaded from YAML or database
 2. Engine performs topological sort to determine execution order
-3. Nodes execute sequentially based on dependencies
-4. Each node execution is tracked in the database
-5. Outputs flow through edges to downstream nodes
-6. Final result is stored in the execution record
+3. Nodes execute according to execution_mode (sequential or parallel)
+4. Each node execution is tracked in the database with:
+   - Input data received from predecessor nodes
+   - Output data produced by the node
+   - Start time, end time, and last update time
+   - Execution status (Running, Success, Failed)
+5. Timeouts are applied at node and workflow level
+6. Outputs flow through edges to downstream nodes
+7. Final result is stored in the execution record
 
 ## Development
 
@@ -499,9 +550,12 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [ ] Web UI for workflow creation and management
 - [ ] More built-in node types (Email, Slack, Database, etc.)
-- [ ] Webhook triggers for workflows
-- [ ] Scheduled workflow execution (cron-like)
-- [ ] Parallel node execution
+- [x] Webhook triggers for workflows
+- [x] Scheduled workflow execution (cron-like configuration)
+- [x] Execution mode configuration (sequential/parallel)
+- [x] Timeout configuration
+- [x] Enhanced execution tracking with input/output
+- [ ] True parallel node execution (currently executes sequentially per level)
 - [ ] Sub-workflows and workflow composition
 - [ ] Error handling and retry logic
 - [ ] Variable interpolation in all node parameters
