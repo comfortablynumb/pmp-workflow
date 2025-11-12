@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +23,10 @@ pub struct HttpRequestNode;
 impl NodeType for HttpRequestNode {
     fn type_name(&self) -> &str {
         "http_request"
+    }
+
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Action
     }
 
     fn parameter_schema(&self) -> serde_json::Value {

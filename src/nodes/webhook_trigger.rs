@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -21,6 +21,10 @@ pub struct WebhookTriggerNode;
 impl NodeType for WebhookTriggerNode {
     fn type_name(&self) -> &str {
         "webhook_trigger"
+    }
+
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Trigger
     }
 
     fn parameter_schema(&self) -> serde_json::Value {
@@ -114,5 +118,14 @@ mod tests {
             "method": "INVALID"
         });
         assert!(node.validate_parameters(&invalid_params).is_err());
+    }
+
+    #[test]
+    fn test_webhook_trigger_category() {
+        use crate::models::NodeCategory;
+
+        let node = WebhookTriggerNode;
+        assert_eq!(node.category(), NodeCategory::Trigger);
+        assert_eq!(node.type_name(), "webhook_trigger");
     }
 }

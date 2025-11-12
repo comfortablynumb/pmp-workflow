@@ -1,12 +1,16 @@
-use crate::models::{Node, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 
-/// Start node - the entry point of a workflow
+/// Start node - the entry point of a workflow (legacy)
 pub struct StartNode;
 
 impl NodeType for StartNode {
     fn type_name(&self) -> &str {
         "start"
+    }
+
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Trigger
     }
 
     fn parameter_schema(&self) -> serde_json::Value {

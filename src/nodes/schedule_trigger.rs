@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use cron::Schedule;
 use serde::Deserialize;
@@ -28,6 +28,10 @@ pub struct ScheduleTriggerNode;
 impl NodeType for ScheduleTriggerNode {
     fn type_name(&self) -> &str {
         "schedule_trigger"
+    }
+
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Trigger
     }
 
     fn parameter_schema(&self) -> serde_json::Value {
@@ -157,5 +161,14 @@ mod tests {
                 cron_expr
             );
         }
+    }
+
+    #[test]
+    fn test_schedule_trigger_category() {
+        use crate::models::NodeCategory;
+
+        let node = ScheduleTriggerNode;
+        assert_eq!(node.category(), NodeCategory::Trigger);
+        assert_eq!(node.type_name(), "schedule_trigger");
     }
 }

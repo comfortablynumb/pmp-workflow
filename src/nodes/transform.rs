@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -16,6 +16,10 @@ pub struct TransformNode;
 impl NodeType for TransformNode {
     fn type_name(&self) -> &str {
         "transform"
+    }
+
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Action
     }
 
     fn parameter_schema(&self) -> serde_json::Value {

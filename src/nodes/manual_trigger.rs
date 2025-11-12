@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -16,6 +16,10 @@ pub struct ManualTriggerNode;
 impl NodeType for ManualTriggerNode {
     fn type_name(&self) -> &str {
         "manual_trigger"
+    }
+
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Trigger
     }
 
     fn parameter_schema(&self) -> serde_json::Value {
@@ -123,5 +127,14 @@ mod tests {
 
         let empty_params = serde_json::json!({});
         assert!(node.validate_parameters(&empty_params).is_ok());
+    }
+
+    #[test]
+    fn test_manual_trigger_category() {
+        use crate::models::NodeCategory;
+
+        let node = ManualTriggerNode;
+        assert_eq!(node.category(), NodeCategory::Trigger);
+        assert_eq!(node.type_name(), "manual_trigger");
     }
 }
