@@ -51,6 +51,24 @@ impl Node for SetVariableNode {
 
         Ok(())
     }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Variable name to set",
+                    "minLength": 1
+                },
+                "value": {
+                    "description": "Value to set. Can be a literal value or use {{field}} syntax to reference input fields"
+                }
+            },
+            "required": ["name", "value"],
+            "additionalProperties": false
+        })
+    }
 }
 
 fn resolve_value(

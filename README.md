@@ -9,13 +9,22 @@ A Rust-based workflow automation engine similar to n8n, with YAML-based configur
 - **YAML Configuration**: Define workflows using simple YAML files
 - **Extensible Node System**: Easy-to-extend node architecture for custom integrations
 - **PostgreSQL Persistence**: Store workflows and execution history in PostgreSQL
+- **Multiple Trigger Types**:
+  - **Manual**: CLI or API-triggered execution
+  - **Webhook**: HTTP endpoint triggers
+  - **Schedule**: Cron-based scheduling (external scheduler required)
 - **Built-in Node Types**:
-  - **Start**: Entry point for workflows
   - **HTTP Request**: Make HTTP/REST API calls
   - **Transform**: Transform and manipulate data
   - **Conditional**: Branch based on conditions
   - **Set Variable**: Manage workflow variables
-- **Execution Tracking**: Full execution history and detailed logging
+  - **Execute Workflow**: Execute sub-workflows
+- **Webhook Server**: Built-in HTTP server for webhook endpoints
+- **Execution Tracking**: Full execution history with detailed logging, including input/output for each node
+- **Execution Modes**: Sequential and true parallel execution with tokio
+- **Timeout Configuration**: Configurable timeouts at workflow and node level
+- **JSON Schema Support**: All node types expose JSON schemas for parameter validation
+- **Sub-Workflows**: Execute workflows from within other workflows
 - **CLI Interface**: Command-line tool for managing and executing workflows
 
 ## Prerequisites
@@ -139,10 +148,15 @@ Workflows are defined in YAML with the following structure:
 name: My Workflow
 description: Optional description
 
+# Execution configuration (optional)
+execution_mode: sequential  # or "parallel" (default: sequential)
+timeout_seconds: 300        # Global timeout in seconds (optional)
+
 nodes:
   - id: unique_node_id
     node_type: start|http_request|transform|conditional|set_variable
     name: Human-readable name
+    timeout_seconds: 30     # Node-specific timeout (optional, overrides global)
     parameters:
       # Node-specific parameters
 
@@ -153,11 +167,122 @@ edges:
     to_input: optional
 ```
 
+### Execution Configuration
+
+#### Execution Modes
+
+- **sequential** (default): Nodes execute one at a time in topological order
+- **parallel**: Nodes at the same dependency level execute concurrently using tokio tasks
+
+```yaml
+execution_mode: parallel
+```
+
+Parallel mode uses tokio::spawn to execute independent nodes concurrently, improving performance for workflows with parallel branches.
+
+#### Timeout Configuration
+
+Configure timeouts to prevent long-running operations:
+
+- **Workflow-level timeout**: Applies to all nodes by default
+- **Node-level timeout**: Overrides workflow timeout for specific nodes
+
+```yaml
+# Global timeout for all nodes
+timeout_seconds: 300
+
+nodes:
+  - id: fast_node
+    node_type: http_request
+    timeout_seconds: 10  # This node gets 10 seconds
+    # ...
+
+  - id: regular_node
+    node_type: transform
+    # No timeout specified - uses workflow timeout (300s)
+    # ...
+```
+
+If a node execution exceeds its timeout, the workflow fails with a timeout error.
+
 ## Node Types
 
-### Start Node
+### Trigger Nodes
 
-Entry point for the workflow. Passes through input data.
+Trigger nodes define how a workflow is started. Every workflow should have one trigger node as the entry point.
+
+#### Manual Trigger
+
+Manually execute a workflow via CLI or API with custom input data.
+
+```yaml
+- id: manual_trigger
+  node_type: manual_trigger
+  name: Manual Trigger
+  parameters:
+    description: "Manually execute this workflow"
+    input_schema:  # Optional schema definition
+      type: object
+      properties:
+        order_id:
+          type: number
+```
+
+Execute manually:
+```bash
+cargo run -- execute "My Workflow" --input '{"order_id": 123}'
+```
+
+#### Webhook Trigger
+
+Trigger a workflow via HTTP webhook endpoint.
+
+```yaml
+- id: webhook_trigger
+  node_type: webhook_trigger
+  name: Webhook Trigger
+  parameters:
+    method: POST  # GET, POST, PUT, DELETE, PATCH
+    description: "Accepts webhook requests"
+```
+
+Start the webhook server:
+```bash
+cargo run -- serve --host 0.0.0.0 --port 3000
+```
+
+Trigger the workflow via HTTP:
+```bash
+curl -X POST http://localhost:3000/api/v1/webhook/{workflow-id}/trigger/{trigger-node-id} \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 123, "action": "create"}'
+```
+
+#### Schedule Trigger
+
+Trigger a workflow based on a cron schedule. The workflow must be triggered externally by a scheduler.
+
+```yaml
+- id: schedule_trigger
+  node_type: schedule_trigger
+  name: Daily Schedule
+  parameters:
+    cron: "0 0 0 * * *"  # Daily at midnight (format: sec min hour day month day-of-week)
+    timezone: "UTC"
+    description: "Runs daily data sync"
+```
+
+Cron format: `second minute hour day-of-month month day-of-week`
+
+Common patterns:
+- `0 0 0 * * *` - Daily at midnight
+- `0 0 */2 * * *` - Every 2 hours
+- `0 */5 * * * *` - Every 5 minutes
+- `0 0 9-17 * * MON-FRI` - Weekdays 9am-5pm
+
+### Start Node (Legacy)
+
+Entry point for the workflow. Passes through input data. **Note:** Consider using trigger nodes instead.
 
 ```yaml
 - id: start
@@ -166,7 +291,9 @@ Entry point for the workflow. Passes through input data.
   parameters: {}
 ```
 
-### HTTP Request Node
+### Action Nodes
+
+#### HTTP Request Node
 
 Makes HTTP requests to external APIs.
 
@@ -256,14 +383,45 @@ Sets workflow variables for use in downstream nodes.
     value: "{{input.field}}"
 ```
 
+### Execute Workflow Node
+
+Executes another workflow as a sub-workflow.
+
+```yaml
+- id: sub_workflow
+  node_type: execute_workflow
+  name: Run Data Processing
+  parameters:
+    workflow_name: "Data Processing Workflow"  # or use workflow_id
+    input:
+      data: "{{input.raw_data}}"
+    wait: true  # Wait for completion (default: true)
+```
+
+Parameters:
+- `workflow_id` or `workflow_name`: Identifier of the workflow to execute
+- `input` (optional): Input data to pass to the sub-workflow
+- `wait` (optional, default: true): Whether to wait for completion
+
+This enables workflow composition and reusability.
+
 ## Examples
 
 See the `examples/` directory for complete workflow examples:
 
+**Basic Workflows:**
 - `simple_workflow.yaml`: Basic workflow demonstrating variables and transforms
 - `http_workflow.yaml`: Fetching data from an API
 - `conditional_workflow.yaml`: Branching based on conditions
 - `complex_workflow.yaml`: Complex multi-step workflow
+
+**Trigger Workflows:**
+- `manual_trigger_workflow.yaml`: Manual workflow execution with input data
+- `webhook_trigger_workflow.yaml`: Webhook-triggered data processing
+- `schedule_trigger_workflow.yaml`: Scheduled data synchronization
+
+**Advanced Examples:**
+- `parallel_workflow.yaml`: Parallel execution with timeouts
 
 ### Example: Simple HTTP API Workflow
 
@@ -371,10 +529,15 @@ pmp-workflow/
 
 1. Workflow is loaded from YAML or database
 2. Engine performs topological sort to determine execution order
-3. Nodes execute sequentially based on dependencies
-4. Each node execution is tracked in the database
-5. Outputs flow through edges to downstream nodes
-6. Final result is stored in the execution record
+3. Nodes execute according to execution_mode (sequential or parallel)
+4. Each node execution is tracked in the database with:
+   - Input data received from predecessor nodes
+   - Output data produced by the node
+   - Start time, end time, and last update time
+   - Execution status (Running, Success, Failed)
+5. Timeouts are applied at node and workflow level
+6. Outputs flow through edges to downstream nodes
+7. Final result is stored in the execution record
 
 ## Development
 
@@ -414,10 +577,14 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [ ] Web UI for workflow creation and management
 - [ ] More built-in node types (Email, Slack, Database, etc.)
-- [ ] Webhook triggers for workflows
-- [ ] Scheduled workflow execution (cron-like)
-- [ ] Parallel node execution
-- [ ] Sub-workflows and workflow composition
+- [x] Webhook triggers for workflows
+- [x] Scheduled workflow execution (cron-like configuration)
+- [x] Execution mode configuration (sequential/parallel)
+- [x] Timeout configuration
+- [x] Enhanced execution tracking with input/output
+- [x] True parallel node execution with tokio
+- [x] JSON Schema support for node parameters
+- [x] Sub-workflows and workflow composition
 - [ ] Error handling and retry logic
 - [ ] Variable interpolation in all node parameters
 - [ ] Authentication and authorization

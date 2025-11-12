@@ -23,4 +23,13 @@ impl Node for StartNode {
 
         Ok(NodeOutput::success(data))
     }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "description": "Start node does not require any parameters. It passes through input data to downstream nodes.",
+            "additionalProperties": false
+        })
+    }
 }

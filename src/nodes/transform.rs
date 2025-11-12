@@ -46,6 +46,30 @@ impl Node for TransformNode {
         // If no transformation specified, pass through
         Ok(NodeOutput::success(input))
     }
+
+    fn parameter_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string",
+                    "description": "JSON path expression to extract a field (e.g., 'user.name' or 'items[0].id')"
+                },
+                "template": {
+                    "description": "JSON template for transformation. Use {{field}} syntax for substitution, {{$variable}} for workflow variables"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": ["expression"]
+                },
+                {
+                    "required": ["template"]
+                }
+            ],
+            "additionalProperties": false
+        })
+    }
 }
 
 /// Extract a field from JSON using a simple path expression

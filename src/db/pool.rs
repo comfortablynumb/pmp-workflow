@@ -17,6 +17,7 @@ pub async fn run_migrations(pool: &PgPool) -> Result<()> {
     let migrations = [
         include_str!("../../migrations/001_create_workflows.sql"),
         include_str!("../../migrations/002_create_executions.sql"),
+        include_str!("../../migrations/003_add_execution_tracking.sql"),
     ];
 
     for (idx, migration) in migrations.iter().enumerate() {
