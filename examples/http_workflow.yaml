@@ -1,0 +1,27 @@
+name: HTTP Request Workflow
+description: A workflow that fetches data from an API and transforms it
+
+nodes:
+  - id: start
+    node_type: start
+    name: Start
+    parameters: {}
+
+  - id: fetch_users
+    node_type: http_request
+    name: Fetch Users
+    parameters:
+      url: "https://jsonplaceholder.typicode.com/users"
+      method: "GET"
+
+  - id: transform_users
+    node_type: transform
+    name: Transform Users
+    parameters:
+      expression: "body"
+
+edges:
+  - from: start
+    to: fetch_users
+  - from: fetch_users
+    to: transform_users
