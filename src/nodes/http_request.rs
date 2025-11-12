@@ -87,7 +87,7 @@ impl Node for HttpRequestNode {
                 return Ok(NodeOutput::error(format!(
                     "Unsupported HTTP method: {}",
                     method
-                )))
+                )));
             }
         };
 

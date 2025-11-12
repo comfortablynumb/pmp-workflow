@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use pmp_workflow::{config, create_node_registry, db, server, WorkflowExecutor};
+use pmp_workflow::{WorkflowExecutor, config, create_node_registry, db, server};
 use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

@@ -3,6 +3,8 @@ pub mod database_query;
 pub mod execute_workflow;
 pub mod http_request;
 pub mod manual_trigger;
+pub mod redis;
+pub mod s3;
 pub mod schedule_trigger;
 pub mod set_variable;
 pub mod start;
@@ -14,6 +16,8 @@ pub use database_query::DatabaseQueryNode;
 pub use execute_workflow::ExecuteWorkflowNode;
 pub use http_request::HttpRequestNode;
 pub use manual_trigger::ManualTriggerNode;
+pub use redis::RedisNode;
+pub use s3::S3Node;
 pub use schedule_trigger::ScheduleTriggerNode;
 pub use set_variable::SetVariableNode;
 pub use start::StartNode;
@@ -39,6 +43,8 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("conditional", || Box::new(ConditionalNode));
     registry.register("set_variable", || Box::new(SetVariableNode));
     registry.register("database_query", || Box::new(DatabaseQueryNode::new()));
+    registry.register("redis", || Box::new(RedisNode::new()));
+    registry.register("s3", || Box::new(S3Node::new()));
 
     // Sub-workflow execution (requires dependencies)
     let pool_clone = pool.clone();

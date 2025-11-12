@@ -106,6 +106,8 @@ pub enum NodeSubcategory {
     Logic,
     /// Database operations
     Database,
+    /// Storage operations (S3, file systems, etc.)
+    Storage,
     /// Workflow execution actions
     Workflow,
     /// Variable management actions

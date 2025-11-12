@@ -285,10 +285,12 @@ edges:
             result.is_err(),
             "Workflow starting with action node should be invalid"
         );
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("must be a trigger node"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be a trigger node")
+        );
     }
 
     #[test]
@@ -365,9 +367,11 @@ edges:
             result.is_err(),
             "Workflow with action node as a starting node should be invalid"
         );
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("must be a trigger node"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be a trigger node")
+        );
     }
 }

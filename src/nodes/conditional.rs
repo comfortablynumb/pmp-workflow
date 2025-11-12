@@ -173,18 +173,22 @@ mod tests {
 
     #[test]
     fn test_string_contains() {
-        assert!(evaluate_condition(
-            &serde_json::json!("hello world"),
-            "contains",
-            &serde_json::json!("world")
-        )
-        .unwrap());
+        assert!(
+            evaluate_condition(
+                &serde_json::json!("hello world"),
+                "contains",
+                &serde_json::json!("world")
+            )
+            .unwrap()
+        );
 
-        assert!(!evaluate_condition(
-            &serde_json::json!("hello world"),
-            "contains",
-            &serde_json::json!("foo")
-        )
-        .unwrap());
+        assert!(
+            !evaluate_condition(
+                &serde_json::json!("hello world"),
+                "contains",
+                &serde_json::json!("foo")
+            )
+            .unwrap()
+        );
     }
 }
