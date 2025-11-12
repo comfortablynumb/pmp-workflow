@@ -25,7 +25,10 @@ impl Node for SetVariableNode {
         parameters: &serde_json::Value,
     ) -> anyhow::Result<NodeOutput> {
         let params: SetVariableParams = serde_json::from_value(parameters.clone())?;
-        let input = context.get_main_input().cloned().unwrap_or(serde_json::json!({}));
+        let input = context
+            .get_main_input()
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
 
         // Resolve value (could be a template)
         let resolved_value = resolve_value(&params.value, &input)?;
@@ -50,7 +53,10 @@ impl Node for SetVariableNode {
     }
 }
 
-fn resolve_value(value: &serde_json::Value, input: &serde_json::Value) -> anyhow::Result<serde_json::Value> {
+fn resolve_value(
+    value: &serde_json::Value,
+    input: &serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
     match value {
         serde_json::Value::String(s) => {
             // Check for field reference syntax: {{field}}

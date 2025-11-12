@@ -16,11 +16,11 @@ pub async fn create_workflow_execution(
         RETURNING *
         "#,
     )
-    .bind(&execution.id)
-    .bind(&execution.workflow_id)
-    .bind(&execution.status.to_string())
-    .bind(&execution.started_at)
-    .bind(&execution.finished_at)
+    .bind(execution.id)
+    .bind(execution.workflow_id)
+    .bind(execution.status.to_string())
+    .bind(execution.started_at)
+    .bind(execution.finished_at)
     .bind(&execution.input_data)
     .bind(&execution.output_data)
     .bind(&execution.error)
@@ -122,12 +122,12 @@ pub async fn create_node_execution(
         RETURNING *
         "#,
     )
-    .bind(&execution.id)
-    .bind(&execution.execution_id)
+    .bind(execution.id)
+    .bind(execution.execution_id)
     .bind(&execution.node_id)
-    .bind(&execution.status.to_string())
-    .bind(&execution.started_at)
-    .bind(&execution.finished_at)
+    .bind(execution.status.to_string())
+    .bind(execution.started_at)
+    .bind(execution.finished_at)
     .bind(&execution.input_data)
     .bind(&execution.output_data)
     .bind(&execution.error)
@@ -167,10 +167,7 @@ pub async fn update_node_execution_status(
 }
 
 /// List node executions for a workflow execution
-pub async fn list_node_executions(
-    pool: &PgPool,
-    execution_id: Uuid,
-) -> Result<Vec<NodeExecution>> {
+pub async fn list_node_executions(pool: &PgPool, execution_id: Uuid) -> Result<Vec<NodeExecution>> {
     let executions = sqlx::query_as::<_, NodeExecution>(
         r#"
         SELECT * FROM node_executions

@@ -1,6 +1,6 @@
+use anyhow::{Context, Result};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, Pool, Postgres};
-use anyhow::{Context, Result};
 
 /// Create a new database connection pool
 pub async fn create_pool(database_url: &str) -> Result<Pool<Postgres>> {
@@ -38,8 +38,9 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires a database connection
     async fn test_create_pool() {
-        let database_url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/pmp_workflow_test".to_string());
+        let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:postgres@localhost/pmp_workflow_test".to_string()
+        });
 
         let result = create_pool(&database_url).await;
         assert!(result.is_ok());

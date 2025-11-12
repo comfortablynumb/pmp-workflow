@@ -12,14 +12,14 @@ pub async fn create_workflow(pool: &PgPool, workflow: &Workflow) -> Result<Workf
         RETURNING *
         "#,
     )
-    .bind(&workflow.id)
+    .bind(workflow.id)
     .bind(&workflow.name)
     .bind(&workflow.description)
-    .bind(&workflow.active)
+    .bind(workflow.active)
     .bind(&workflow.nodes)
     .bind(&workflow.edges)
-    .bind(&workflow.created_at)
-    .bind(&workflow.updated_at)
+    .bind(workflow.created_at)
+    .bind(workflow.updated_at)
     .fetch_one(pool)
     .await
     .context("Failed to create workflow")?;
@@ -83,10 +83,10 @@ pub async fn update_workflow(pool: &PgPool, workflow: &Workflow) -> Result<Workf
         RETURNING *
         "#,
     )
-    .bind(&workflow.id)
+    .bind(workflow.id)
     .bind(&workflow.name)
     .bind(&workflow.description)
-    .bind(&workflow.active)
+    .bind(workflow.active)
     .bind(&workflow.nodes)
     .bind(&workflow.edges)
     .fetch_one(pool)

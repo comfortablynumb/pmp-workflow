@@ -27,7 +27,10 @@ impl Node for ConditionalNode {
         parameters: &serde_json::Value,
     ) -> anyhow::Result<NodeOutput> {
         let params: ConditionalParams = serde_json::from_value(parameters.clone())?;
-        let input = context.get_main_input().cloned().unwrap_or(serde_json::json!({}));
+        let input = context
+            .get_main_input()
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
 
         // Extract the field value
         let field_value = extract_field(&input, &params.field)?;
@@ -47,7 +50,11 @@ impl Node for ConditionalNode {
 
         let valid_operators = ["eq", "ne", "gt", "lt", "gte", "lte", "contains"];
         if !valid_operators.contains(&params.operator.as_str()) {
-            anyhow::bail!("Invalid operator: {}. Valid operators are: {:?}", params.operator, valid_operators);
+            anyhow::bail!(
+                "Invalid operator: {}. Valid operators are: {:?}",
+                params.operator,
+                valid_operators
+            );
         }
 
         Ok(())
@@ -79,28 +86,48 @@ fn evaluate_condition(
         "eq" => Ok(field_value == compare_value),
         "ne" => Ok(field_value != compare_value),
         "gt" => {
-            let a = field_value.as_f64().ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value.as_f64().ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
+            let a = field_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
+            let b = compare_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
             Ok(a > b)
         }
         "lt" => {
-            let a = field_value.as_f64().ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value.as_f64().ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
+            let a = field_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
+            let b = compare_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
             Ok(a < b)
         }
         "gte" => {
-            let a = field_value.as_f64().ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value.as_f64().ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
+            let a = field_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
+            let b = compare_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
             Ok(a >= b)
         }
         "lte" => {
-            let a = field_value.as_f64().ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
-            let b = compare_value.as_f64().ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
+            let a = field_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Field is not a number"))?;
+            let b = compare_value
+                .as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Compare value is not a number"))?;
             Ok(a <= b)
         }
         "contains" => {
-            let a = field_value.as_str().ok_or_else(|| anyhow::anyhow!("Field is not a string"))?;
-            let b = compare_value.as_str().ok_or_else(|| anyhow::anyhow!("Compare value is not a string"))?;
+            let a = field_value
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Field is not a string"))?;
+            let b = compare_value
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Compare value is not a string"))?;
             Ok(a.contains(b))
         }
         _ => anyhow::bail!("Unknown operator: {}", operator),

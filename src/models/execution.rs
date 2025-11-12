@@ -101,3 +101,66 @@ impl NodeExecution {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_execution_status_display() {
+        assert_eq!(ExecutionStatus::Running.to_string(), "running");
+        assert_eq!(ExecutionStatus::Success.to_string(), "success");
+        assert_eq!(ExecutionStatus::Failed.to_string(), "failed");
+        assert_eq!(ExecutionStatus::Cancelled.to_string(), "cancelled");
+    }
+
+    #[test]
+    fn test_execution_status_try_from() {
+        assert!(matches!(
+            ExecutionStatus::try_from("running".to_string()),
+            Ok(ExecutionStatus::Running)
+        ));
+        assert!(matches!(
+            ExecutionStatus::try_from("success".to_string()),
+            Ok(ExecutionStatus::Success)
+        ));
+        assert!(matches!(
+            ExecutionStatus::try_from("failed".to_string()),
+            Ok(ExecutionStatus::Failed)
+        ));
+        assert!(matches!(
+            ExecutionStatus::try_from("cancelled".to_string()),
+            Ok(ExecutionStatus::Cancelled)
+        ));
+        assert!(ExecutionStatus::try_from("invalid".to_string()).is_err());
+    }
+
+    #[test]
+    fn test_workflow_execution_new() {
+        let workflow_id = Uuid::new_v4();
+        let input = Some(serde_json::json!({"key": "value"}));
+        let execution = WorkflowExecution::new(workflow_id, input.clone());
+
+        assert_eq!(execution.workflow_id, workflow_id);
+        assert!(matches!(execution.status, ExecutionStatus::Running));
+        assert_eq!(execution.input_data, input);
+        assert!(execution.output_data.is_none());
+        assert!(execution.error.is_none());
+        assert!(execution.finished_at.is_none());
+    }
+
+    #[test]
+    fn test_node_execution_new() {
+        let execution_id = Uuid::new_v4();
+        let node_id = "test-node".to_string();
+        let node_exec = NodeExecution::new(execution_id, node_id.clone());
+
+        assert_eq!(node_exec.execution_id, execution_id);
+        assert_eq!(node_exec.node_id, node_id);
+        assert!(matches!(node_exec.status, ExecutionStatus::Running));
+        assert!(node_exec.input_data.is_none());
+        assert!(node_exec.output_data.is_none());
+        assert!(node_exec.error.is_none());
+        assert!(node_exec.finished_at.is_none());
+    }
+}

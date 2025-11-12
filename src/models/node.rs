@@ -140,3 +140,99 @@ impl Default for NodeRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_context_new() {
+        let context = NodeContext::new("exec-123".to_string(), "node-1".to_string());
+        assert_eq!(context.execution_id, "exec-123");
+        assert_eq!(context.node_id, "node-1");
+        assert!(context.inputs.is_empty());
+        assert!(context.variables.is_empty());
+    }
+
+    #[test]
+    fn test_node_context_input_operations() {
+        let mut context = NodeContext::new("exec-123".to_string(), "node-1".to_string());
+
+        context.add_input("key1".to_string(), serde_json::json!({"value": 42}));
+
+        assert!(context.get_input("key1").is_some());
+        assert!(context.get_input("key2").is_none());
+        assert_eq!(
+            context.get_input("key1").unwrap(),
+            &serde_json::json!({"value": 42})
+        );
+
+        let main_input = context.get_main_input();
+        assert!(main_input.is_some());
+    }
+
+    #[test]
+    fn test_node_context_variable_operations() {
+        let mut context = NodeContext::new("exec-123".to_string(), "node-1".to_string());
+
+        context.set_variable("var1".to_string(), serde_json::json!("test"));
+
+        assert!(context.get_variable("var1").is_some());
+        assert_eq!(
+            context.get_variable("var1").unwrap(),
+            &serde_json::json!("test")
+        );
+        assert!(context.get_variable("var2").is_none());
+    }
+
+    #[test]
+    fn test_node_output_success() {
+        let output = NodeOutput::success(serde_json::json!({"result": "ok"}));
+        assert!(output.success);
+        assert!(output.error.is_none());
+        assert_eq!(output.data, serde_json::json!({"result": "ok"}));
+    }
+
+    #[test]
+    fn test_node_output_error() {
+        let output = NodeOutput::error("Something went wrong".to_string());
+        assert!(!output.success);
+        assert_eq!(output.error, Some("Something went wrong".to_string()));
+        assert_eq!(output.data, serde_json::Value::Null);
+    }
+
+    struct TestNode;
+
+    #[async_trait]
+    impl Node for TestNode {
+        fn node_type(&self) -> &str {
+            "test_node"
+        }
+
+        async fn execute(
+            &self,
+            _context: &NodeContext,
+            _parameters: &serde_json::Value,
+        ) -> anyhow::Result<NodeOutput> {
+            Ok(NodeOutput::success(serde_json::json!({"test": true})))
+        }
+    }
+
+    #[test]
+    fn test_node_registry() {
+        let mut registry = NodeRegistry::new();
+
+        registry.register("test_node", || Box::new(TestNode));
+
+        let types = registry.get_types();
+        assert_eq!(types.len(), 1);
+        assert!(types.contains(&"test_node".to_string()));
+
+        let node = registry.create("test_node");
+        assert!(node.is_ok());
+        assert_eq!(node.unwrap().node_type(), "test_node");
+
+        let invalid = registry.create("invalid");
+        assert!(invalid.is_err());
+    }
+}

@@ -25,7 +25,10 @@ impl Node for TransformNode {
         parameters: &serde_json::Value,
     ) -> anyhow::Result<NodeOutput> {
         let params: TransformParams = serde_json::from_value(parameters.clone())?;
-        let input = context.get_main_input().cloned().unwrap_or(serde_json::json!({}));
+        let input = context
+            .get_main_input()
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
 
         // If template is provided, use it
         if let Some(template) = params.template {

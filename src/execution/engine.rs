@@ -206,10 +206,7 @@ impl WorkflowEngine {
 
         // Build adjacency list and in-degree map
         for edge in &workflow.edges {
-            adj_list
-                .get_mut(&edge.from)
-                .unwrap()
-                .push(edge.to.clone());
+            adj_list.get_mut(&edge.from).unwrap().push(edge.to.clone());
             *in_degree.get_mut(&edge.to).unwrap() += 1;
         }
 

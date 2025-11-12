@@ -109,11 +109,12 @@ async fn main() -> Result<()> {
 
             println!("Workflows:");
             for workflow in workflows {
-                let status = if workflow.active { "active" } else { "inactive" };
-                println!(
-                    "  {} - {} ({})",
-                    workflow.id, workflow.name, status
-                );
+                let status = if workflow.active {
+                    "active"
+                } else {
+                    "inactive"
+                };
+                println!("  {} - {} ({})", workflow.id, workflow.name, status);
                 if let Some(desc) = workflow.description {
                     println!("    {}", desc);
                 }
@@ -174,7 +175,10 @@ async fn main() -> Result<()> {
 
             println!("Execution history:");
             for execution in executions {
-                println!("  {} - {} ({})", execution.id, execution.status, execution.started_at);
+                println!(
+                    "  {} - {} ({})",
+                    execution.id, execution.status, execution.started_at
+                );
                 if let Some(error) = execution.error {
                     println!("    Error: {}", error);
                 }
@@ -208,7 +212,10 @@ async fn main() -> Result<()> {
 
             println!("\nNode executions:");
             for node_exec in node_executions {
-                println!("  {} - {} ({})", node_exec.node_id, node_exec.status, node_exec.started_at);
+                println!(
+                    "  {} - {} ({})",
+                    node_exec.node_id, node_exec.status, node_exec.started_at
+                );
                 if let Some(error) = node_exec.error {
                     println!("    Error: {}", error);
                 }

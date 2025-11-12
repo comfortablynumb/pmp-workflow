@@ -78,3 +78,52 @@ impl Workflow {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_workflow_definition_to_workflow() {
+        let def = WorkflowDefinition {
+            name: "Test Workflow".to_string(),
+            description: Some("A test workflow".to_string()),
+            nodes: vec![NodeDefinition {
+                id: "node1".to_string(),
+                node_type: "start".to_string(),
+                name: "Start".to_string(),
+                parameters: serde_json::json!({}),
+            }],
+            edges: vec![],
+        };
+
+        let workflow = def.to_workflow().unwrap();
+        assert_eq!(workflow.name, "Test Workflow");
+        assert_eq!(workflow.description, Some("A test workflow".to_string()));
+        assert!(workflow.active);
+    }
+
+    #[test]
+    fn test_workflow_to_definition() {
+        let workflow = Workflow {
+            id: Uuid::new_v4(),
+            name: "Test Workflow".to_string(),
+            description: Some("A test workflow".to_string()),
+            active: true,
+            nodes: serde_json::json!([{
+                "id": "node1",
+                "node_type": "start",
+                "name": "Start",
+                "parameters": {}
+            }]),
+            edges: serde_json::json!([]),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        let def = workflow.to_definition().unwrap();
+        assert_eq!(def.name, "Test Workflow");
+        assert_eq!(def.nodes.len(), 1);
+        assert_eq!(def.nodes[0].id, "node1");
+    }
+}

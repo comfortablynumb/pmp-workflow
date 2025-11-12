@@ -18,8 +18,8 @@ pub async fn load_workflow_from_file(path: &Path) -> Result<WorkflowDefinition> 
 
 /// Load a workflow definition from a YAML string
 pub fn load_workflow_from_str(yaml: &str) -> Result<WorkflowDefinition> {
-    let workflow: WorkflowDefinition = serde_yaml::from_str(yaml)
-        .context("Failed to parse workflow YAML")?;
+    let workflow: WorkflowDefinition =
+        serde_yaml::from_str(yaml).context("Failed to parse workflow YAML")?;
 
     validate_workflow(&workflow)?;
 
@@ -69,10 +69,7 @@ fn has_cycle(workflow: &WorkflowDefinition) -> bool {
         graph.insert(&node.id, Vec::new());
     }
     for edge in &workflow.edges {
-        graph
-            .get_mut(edge.from.as_str())
-            .unwrap()
-            .push(&edge.to);
+        graph.get_mut(edge.from.as_str()).unwrap().push(&edge.to);
     }
 
     // DFS to detect cycles
@@ -105,10 +102,10 @@ fn has_cycle(workflow: &WorkflowDefinition) -> bool {
     }
 
     for node in workflow.nodes.iter() {
-        if !visited.contains(node.id.as_str()) {
-            if dfs(&node.id, &graph, &mut visited, &mut rec_stack) {
-                return true;
-            }
+        if !visited.contains(node.id.as_str())
+            && dfs(&node.id, &graph, &mut visited, &mut rec_stack)
+        {
+            return true;
         }
     }
 
@@ -118,7 +115,6 @@ fn has_cycle(workflow: &WorkflowDefinition) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{EdgeDefinition, NodeDefinition};
 
     #[test]
     fn test_load_valid_workflow() {

@@ -42,7 +42,12 @@ impl Node for HttpRequestNode {
             "PUT" => client.put(&params.url),
             "DELETE" => client.delete(&params.url),
             "PATCH" => client.patch(&params.url),
-            _ => return Ok(NodeOutput::error(format!("Unsupported HTTP method: {}", method))),
+            _ => {
+                return Ok(NodeOutput::error(format!(
+                    "Unsupported HTTP method: {}",
+                    method
+                )))
+            }
         };
 
         // Add headers
