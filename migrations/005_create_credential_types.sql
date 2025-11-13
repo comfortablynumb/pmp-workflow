@@ -325,4 +325,127 @@ INSERT INTO credential_types (id, name, description, json_schema) VALUES
         },
         "required": ["host", "username", "protocol"]
     }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000016',
+    'jira_api_token',
+    'Jira API Token',
+    '{
+        "type": "object",
+        "properties": {
+            "base_url": {
+                "type": "string",
+                "description": "Jira instance URL (e.g., https://your-domain.atlassian.net)"
+            },
+            "email": {
+                "type": "string",
+                "description": "User email for authentication"
+            },
+            "api_token": {
+                "type": "string",
+                "description": "Jira API Token"
+            }
+        },
+        "required": ["base_url", "email", "api_token"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000017',
+    'discord_bot_token',
+    'Discord Bot Token',
+    '{
+        "type": "object",
+        "properties": {
+            "bot_token": {
+                "type": "string",
+                "description": "Discord Bot Token"
+            }
+        },
+        "required": ["bot_token"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000018',
+    'mysql_connection',
+    'MySQL Database Connection',
+    '{
+        "type": "object",
+        "properties": {
+            "host": {
+                "type": "string",
+                "description": "MySQL server hostname"
+            },
+            "port": {
+                "type": "integer",
+                "description": "MySQL port (default: 3306)"
+            },
+            "username": {
+                "type": "string",
+                "description": "Database username"
+            },
+            "password": {
+                "type": "string",
+                "description": "Database password"
+            },
+            "database": {
+                "type": "string",
+                "description": "Database name"
+            },
+            "ssl": {
+                "type": "boolean",
+                "description": "Use SSL connection"
+            }
+        },
+        "required": ["host", "username", "password"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000019',
+    'mongodb_connection',
+    'MongoDB Connection',
+    '{
+        "type": "object",
+        "properties": {
+            "connection_string": {
+                "type": "string",
+                "description": "MongoDB connection string (mongodb://... or mongodb+srv://...)"
+            },
+            "database": {
+                "type": "string",
+                "description": "Default database name"
+            }
+        },
+        "required": ["connection_string"]
+    }'::jsonb
+),
+(
+    '00000000-0000-0000-0000-000000000020',
+    'elasticsearch_connection',
+    'Elasticsearch Connection',
+    '{
+        "type": "object",
+        "properties": {
+            "host": {
+                "type": "string",
+                "description": "Elasticsearch host URL (e.g., https://localhost:9200)"
+            },
+            "username": {
+                "type": "string",
+                "description": "Username for authentication"
+            },
+            "password": {
+                "type": "string",
+                "description": "Password for authentication"
+            },
+            "api_key": {
+                "type": "string",
+                "description": "API Key for authentication (alternative to username/password)"
+            },
+            "cloud_id": {
+                "type": "string",
+                "description": "Elastic Cloud ID (alternative to host)"
+            }
+        },
+        "required": ["host"]
+    }'::jsonb
 );
