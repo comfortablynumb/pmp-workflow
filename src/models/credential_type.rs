@@ -39,14 +39,14 @@ impl CredentialType {
         }
 
         // Basic validation: check that all required fields are present
-        if let Some(required) = self.json_schema.get("required") {
-            if let Some(required_fields) = required.as_array() {
-                for field in required_fields {
-                    if let Some(field_name) = field.as_str() {
-                        if !data.get(field_name).is_some() {
-                            anyhow::bail!("Missing required field: {}", field_name);
-                        }
-                    }
+        if let Some(required) = self.json_schema.get("required")
+            && let Some(required_fields) = required.as_array()
+        {
+            for field in required_fields {
+                if let Some(field_name) = field.as_str()
+                    && data.get(field_name).is_none()
+                {
+                    anyhow::bail!("Missing required field: {}", field_name);
                 }
             }
         }

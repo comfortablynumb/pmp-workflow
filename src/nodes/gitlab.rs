@@ -494,10 +494,10 @@ impl Node for GitLabNode {
         }
 
         // Validate per_page range
-        if let Some(per_page) = params.per_page {
-            if !(1..=100).contains(&per_page) {
-                anyhow::bail!("per_page must be between 1 and 100");
-            }
+        if let Some(per_page) = params.per_page
+            && !(1..=100).contains(&per_page)
+        {
+            anyhow::bail!("per_page must be between 1 and 100");
         }
 
         Ok(())

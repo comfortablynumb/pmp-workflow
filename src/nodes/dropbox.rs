@@ -291,10 +291,10 @@ impl Node for DropboxNode {
         }
 
         // Validate max_results range
-        if let Some(max_results) = params.max_results {
-            if !(1..=1000).contains(&max_results) {
-                anyhow::bail!("max_results must be between 1 and 1000");
-            }
+        if let Some(max_results) = params.max_results
+            && !(1..=1000).contains(&max_results)
+        {
+            anyhow::bail!("max_results must be between 1 and 1000");
         }
 
         Ok(())

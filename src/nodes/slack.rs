@@ -361,10 +361,10 @@ impl Node for SlackNode {
         }
 
         // Validate that update_message and delete_message have ts
-        if ["update_message", "delete_message"].contains(&params.operation.as_str()) {
-            if params.ts.is_none() {
-                anyhow::bail!("{} operation requires 'ts' parameter", params.operation);
-            }
+        if ["update_message", "delete_message"].contains(&params.operation.as_str())
+            && params.ts.is_none()
+        {
+            anyhow::bail!("{} operation requires 'ts' parameter", params.operation);
         }
 
         // Validate that post_file has file_path or file_content

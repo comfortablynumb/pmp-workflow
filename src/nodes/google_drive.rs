@@ -325,10 +325,10 @@ impl Node for GoogleDriveNode {
         }
 
         // Validate page_size range
-        if let Some(page_size) = params.page_size {
-            if !(1..=1000).contains(&page_size) {
-                anyhow::bail!("page_size must be between 1 and 1000");
-            }
+        if let Some(page_size) = params.page_size
+            && !(1..=1000).contains(&page_size)
+        {
+            anyhow::bail!("page_size must be between 1 and 1000");
         }
 
         Ok(())

@@ -317,45 +317,45 @@ impl Node for OpenAINode {
         }
 
         // Validate temperature range
-        if let Some(temp) = params.temperature {
-            if !(0.0..=2.0).contains(&temp) {
-                anyhow::bail!("temperature must be between 0.0 and 2.0");
-            }
+        if let Some(temp) = params.temperature
+            && !(0.0..=2.0).contains(&temp)
+        {
+            anyhow::bail!("temperature must be between 0.0 and 2.0");
         }
 
         // Validate top_p range
-        if let Some(top_p) = params.top_p {
-            if !(0.0..=1.0).contains(&top_p) {
-                anyhow::bail!("top_p must be between 0.0 and 1.0");
-            }
+        if let Some(top_p) = params.top_p
+            && !(0.0..=1.0).contains(&top_p)
+        {
+            anyhow::bail!("top_p must be between 0.0 and 1.0");
         }
 
         // Validate frequency_penalty range
-        if let Some(penalty) = params.frequency_penalty {
-            if !(-2.0..=2.0).contains(&penalty) {
-                anyhow::bail!("frequency_penalty must be between -2.0 and 2.0");
-            }
+        if let Some(penalty) = params.frequency_penalty
+            && !(-2.0..=2.0).contains(&penalty)
+        {
+            anyhow::bail!("frequency_penalty must be between -2.0 and 2.0");
         }
 
         // Validate presence_penalty range
-        if let Some(penalty) = params.presence_penalty {
-            if !(-2.0..=2.0).contains(&penalty) {
-                anyhow::bail!("presence_penalty must be between -2.0 and 2.0");
-            }
+        if let Some(penalty) = params.presence_penalty
+            && !(-2.0..=2.0).contains(&penalty)
+        {
+            anyhow::bail!("presence_penalty must be between -2.0 and 2.0");
         }
 
         // Validate n range
-        if let Some(n) = params.n {
-            if !(1..=10).contains(&n) {
-                anyhow::bail!("n must be between 1 and 10");
-            }
+        if let Some(n) = params.n
+            && !(1..=10).contains(&n)
+        {
+            anyhow::bail!("n must be between 1 and 10");
         }
 
         // Validate stop sequences
-        if let Some(ref stop) = params.stop {
-            if stop.len() > 4 {
-                anyhow::bail!("stop can have at most 4 sequences");
-            }
+        if let Some(ref stop) = params.stop
+            && stop.len() > 4
+        {
+            anyhow::bail!("stop can have at most 4 sequences");
         }
 
         Ok(())

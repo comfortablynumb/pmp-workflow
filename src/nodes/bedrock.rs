@@ -341,17 +341,17 @@ impl Node for BedrockNode {
         }
 
         // Validate temperature range
-        if let Some(temp) = params.temperature {
-            if !(0.0..=1.0).contains(&temp) {
-                anyhow::bail!("temperature must be between 0.0 and 1.0");
-            }
+        if let Some(temp) = params.temperature
+            && !(0.0..=1.0).contains(&temp)
+        {
+            anyhow::bail!("temperature must be between 0.0 and 1.0");
         }
 
         // Validate top_p range
-        if let Some(top_p) = params.top_p {
-            if !(0.0..=1.0).contains(&top_p) {
-                anyhow::bail!("top_p must be between 0.0 and 1.0");
-            }
+        if let Some(top_p) = params.top_p
+            && !(0.0..=1.0).contains(&top_p)
+        {
+            anyhow::bail!("top_p must be between 0.0 and 1.0");
         }
 
         // Validate that Anthropic Claude models have max_tokens for invoke operations

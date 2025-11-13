@@ -435,10 +435,10 @@ impl Node for GitHubNode {
         }
 
         // Validate create operations
-        if params.operation == "create_issue" {
-            if params.title.is_none() {
-                anyhow::bail!("create_issue operation requires 'title' parameter");
-            }
+        if params.operation == "create_issue"
+            && params.title.is_none()
+        {
+            anyhow::bail!("create_issue operation requires 'title' parameter");
         }
 
         if params.operation == "create_pull_request" {
@@ -453,10 +453,10 @@ impl Node for GitHubNode {
             }
         }
 
-        if params.operation == "create_release" {
-            if params.tag_name.is_none() {
-                anyhow::bail!("create_release operation requires 'tag_name' parameter");
-            }
+        if params.operation == "create_release"
+            && params.tag_name.is_none()
+        {
+            anyhow::bail!("create_release operation requires 'tag_name' parameter");
         }
 
         // Validate file operations
@@ -486,10 +486,10 @@ impl Node for GitHubNode {
         }
 
         // Validate per_page range
-        if let Some(per_page) = params.per_page {
-            if !(1..=100).contains(&per_page) {
-                anyhow::bail!("per_page must be between 1 and 100");
-            }
+        if let Some(per_page) = params.per_page
+            && !(1..=100).contains(&per_page)
+        {
+            anyhow::bail!("per_page must be between 1 and 100");
         }
 
         Ok(())

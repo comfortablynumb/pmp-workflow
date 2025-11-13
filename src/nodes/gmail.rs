@@ -461,17 +461,17 @@ impl Node for GmailNode {
         }
 
         // Validate max_results range
-        if let Some(max_results) = params.max_results {
-            if !(1..=500).contains(&max_results) {
-                anyhow::bail!("max_results must be between 1 and 500");
-            }
+        if let Some(max_results) = params.max_results
+            && !(1..=500).contains(&max_results)
+        {
+            anyhow::bail!("max_results must be between 1 and 500");
         }
 
         // Validate body_type
-        if let Some(ref body_type) = params.body_type {
-            if !["text", "html"].contains(&body_type.as_str()) {
-                anyhow::bail!("body_type must be 'text' or 'html'");
-            }
+        if let Some(ref body_type) = params.body_type
+            && !["text", "html"].contains(&body_type.as_str())
+        {
+            anyhow::bail!("body_type must be 'text' or 'html'");
         }
 
         Ok(())

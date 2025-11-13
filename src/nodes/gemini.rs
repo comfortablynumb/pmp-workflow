@@ -317,31 +317,31 @@ impl Node for GeminiNode {
         }
 
         // Validate temperature range
-        if let Some(temp) = params.temperature {
-            if !(0.0..=2.0).contains(&temp) {
-                anyhow::bail!("temperature must be between 0.0 and 2.0");
-            }
+        if let Some(temp) = params.temperature
+            && !(0.0..=2.0).contains(&temp)
+        {
+            anyhow::bail!("temperature must be between 0.0 and 2.0");
         }
 
         // Validate top_p range
-        if let Some(top_p) = params.top_p {
-            if !(0.0..=1.0).contains(&top_p) {
-                anyhow::bail!("top_p must be between 0.0 and 1.0");
-            }
+        if let Some(top_p) = params.top_p
+            && !(0.0..=1.0).contains(&top_p)
+        {
+            anyhow::bail!("top_p must be between 0.0 and 1.0");
         }
 
         // Validate top_k range
-        if let Some(top_k) = params.top_k {
-            if !(1..=100).contains(&top_k) {
-                anyhow::bail!("top_k must be between 1 and 100");
-            }
+        if let Some(top_k) = params.top_k
+            && !(1..=100).contains(&top_k)
+        {
+            anyhow::bail!("top_k must be between 1 and 100");
         }
 
         // Validate stop_sequences
-        if let Some(ref stop) = params.stop_sequences {
-            if stop.len() > 5 {
-                anyhow::bail!("stop_sequences can have at most 5 sequences");
-            }
+        if let Some(ref stop) = params.stop_sequences
+            && stop.len() > 5
+        {
+            anyhow::bail!("stop_sequences can have at most 5 sequences");
         }
 
         // Validate vision operations
