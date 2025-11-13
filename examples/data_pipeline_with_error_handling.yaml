@@ -1,0 +1,419 @@
+name: "Data Pipeline with Error Handling"
+description: "Demonstrates error handling and data transformation nodes in a realistic ETL pipeline"
+version: "1.0.0"
+
+nodes:
+  # 1. Start: Manual trigger
+  - id: "start"
+    type: "manual_trigger"
+    name: "Pipeline Trigger"
+    parameters:
+      description: "Trigger data pipeline processing"
+
+  # 2. Fetch data from multiple sources with circuit breaker
+  - id: "circuit_breaker_api"
+    type: "circuit_breaker"
+    name: "API Circuit Breaker"
+    parameters:
+      failure_threshold: 5
+      success_threshold: 2
+      timeout_seconds: 60
+      circuit_id: "external-api-circuit"
+
+  # 3. Fetch customer data with retry logic
+  - id: "fetch_customers"
+    type: "retry"
+    name: "Fetch Customer Data"
+    parameters:
+      max_attempts: 3
+      initial_delay_ms: 1000
+      backoff_multiplier: 2.0
+      max_delay_ms: 10000
+      retry_on_errors: ["timeout", "connection_error", "rate_limit"]
+    # In real implementation, would wrap an HTTP request node
+
+  # 4. Fetch orders with timeout enforcement
+  - id: "fetch_orders"
+    type: "timeout"
+    name: "Fetch Orders with Timeout"
+    parameters:
+      timeout_seconds: 30
+      on_timeout: "default"
+      default_value:
+        orders: []
+        source: "fallback"
+
+  # 5. Merge customer and order data
+  - id: "merge_data"
+    type: "merge"
+    name: "Combine Data Sources"
+    parameters:
+      strategy: "all"
+      combine_mode: "object"
+      timeout: 45
+
+  # 6. Try/Catch wrapper for data validation
+  - id: "validate_data"
+    type: "try_catch"
+    name: "Validate Data Quality"
+    parameters:
+      continue_on_error: true
+      error_strategy: "catch"
+      default_value:
+        validation_passed: false
+        errors: []
+
+  # 7. Filter out invalid records
+  - id: "filter_valid_records"
+    type: "filter"
+    name: "Filter Valid Customers"
+    parameters:
+      array_path: "$.customers"
+      condition:
+        field: "status"
+        operator: "equals"
+        value: "active"
+
+  # 8. Filter high-value customers
+  - id: "filter_high_value"
+    type: "filter"
+    name: "Filter High-Value Customers"
+    parameters:
+      array_path: "$.filtered_customers"
+      condition:
+        field: "lifetime_value"
+        operator: "greater_than"
+        value: 1000
+
+  # 9. Map to enrich customer data
+  - id: "enrich_customers"
+    type: "map"
+    name: "Enrich Customer Records"
+    parameters:
+      array_path: "$.high_value_customers"
+      mapping:
+        customer_id: "{{id}}"
+        full_name: "{{first_name}} {{last_name}}"
+        email: "{{email}}"
+        segment: "high_value"
+        lifetime_value: "{{lifetime_value}}"
+        join_date: "{{created_at}}"
+
+  # 10. Group customers by region
+  - id: "group_by_region"
+    type: "group_by"
+    name: "Group by Region"
+    parameters:
+      array_path: "$.enriched_customers"
+      group_by: "region"
+
+  # 11. Process each region in a loop
+  - id: "process_regions"
+    type: "loop"
+    name: "Process Each Region"
+    parameters:
+      items: "$regions"
+      item_variable: "region"
+      index_variable: "region_idx"
+      max_iterations: 100
+
+  # 12. Sort customers within each region by lifetime value
+  - id: "sort_by_value"
+    type: "sort"
+    name: "Sort by Lifetime Value"
+    parameters:
+      array_path: "$.region.customers"
+      sort_by: "lifetime_value"
+      order: "desc"
+
+  # 13. Calculate regional metrics with reduce
+  - id: "calculate_metrics"
+    type: "reduce"
+    name: "Calculate Regional Metrics"
+    parameters:
+      array_path: "$.sorted_customers"
+      operation: "sum"
+      field: "lifetime_value"
+
+  # 14. Flatten nested order data
+  - id: "flatten_orders"
+    type: "flatten"
+    name: "Flatten Order Items"
+    parameters:
+      array_path: "$.orders"
+      depth: 2
+
+  # 15. Switch based on data volume
+  - id: "route_by_volume"
+    type: "switch"
+    name: "Route by Data Volume"
+    parameters:
+      switch_on: "$.total_customers"
+      cases:
+        - value: "small"
+          condition:
+            type: "less_than"
+            threshold: 100
+        - value: "medium"
+          condition:
+            type: "less_than"
+            threshold: 1000
+        - value: "large"
+          condition:
+            type: "greater_than_or_equal"
+            threshold: 1000
+      default: "medium"
+
+  # 16. Split processing for parallel execution
+  - id: "parallel_processing"
+    type: "split"
+    name: "Split for Parallel Processing"
+    parameters:
+      branches: 3
+      wait_for_all: true
+
+  # 17a. Branch 1: Export to Google Sheets
+  - id: "export_to_sheets"
+    type: "google_sheets"
+    name: "Export to Google Sheets"
+    parameters:
+      operation: "write_values"
+      spreadsheet_id: "{{env.REPORT_SPREADSHEET_ID}}"
+      range: "CustomerData!A1:Z1000"
+      values: "{{customers_array}}"
+
+  # 17b. Branch 2: Send Slack notification with retry
+  - id: "notify_slack_retry"
+    type: "retry"
+    name: "Slack Notification with Retry"
+    parameters:
+      max_attempts: 3
+      initial_delay_ms: 500
+      backoff_multiplier: 2.0
+
+  - id: "notify_slack"
+    type: "slack"
+    name: "Send Slack Summary"
+    parameters:
+      operation: "send_message"
+      channel: "#data-pipeline"
+      message: "Pipeline completed: {{total_customers}} customers processed"
+
+  # 17c. Branch 3: Update calendar with try/catch
+  - id: "update_calendar_safe"
+    type: "try_catch"
+    name: "Update Calendar Safely"
+    parameters:
+      continue_on_error: true
+      error_strategy: "log"
+
+  - id: "update_calendar"
+    type: "google_calendar"
+    name: "Schedule Follow-up"
+    parameters:
+      operation: "create_event"
+      calendar_id: "primary"
+      event:
+        summary: "Pipeline Report Review"
+        start_time: "{{next_business_day}}"
+        end_time: "{{next_business_day_plus_1h}}"
+
+  # 18. Merge parallel branches
+  - id: "merge_results"
+    type: "merge"
+    name: "Combine Results"
+    parameters:
+      strategy: "all"
+      combine_mode: "object"
+      timeout: 60
+
+  # 19. Add delay before final notification
+  - id: "delay_before_final"
+    type: "delay"
+    name: "Wait Before Final Notification"
+    parameters:
+      duration_seconds: 5
+
+  # 20. Final status update
+  - id: "final_status"
+    type: "slack"
+    name: "Send Final Status"
+    parameters:
+      operation: "send_message"
+      channel: "#data-pipeline"
+      message: |
+        ✅ Data Pipeline Complete
+
+        📊 Summary:
+        - Total Customers: {{total_customers}}
+        - High-Value Customers: {{high_value_count}}
+        - Regions Processed: {{region_count}}
+        - Total Revenue: ${{total_revenue}}
+
+        🔗 Report: {{sheets_url}}
+
+# Workflow connections
+connections:
+  - from: "start"
+    to: "circuit_breaker_api"
+
+  - from: "circuit_breaker_api"
+    to: "fetch_customers"
+
+  - from: "fetch_customers"
+    to: "fetch_orders"
+
+  - from: "fetch_orders"
+    to: "merge_data"
+
+  - from: "merge_data"
+    to: "validate_data"
+
+  - from: "validate_data"
+    to: "filter_valid_records"
+
+  - from: "filter_valid_records"
+    to: "filter_high_value"
+
+  - from: "filter_high_value"
+    to: "enrich_customers"
+
+  - from: "enrich_customers"
+    to: "group_by_region"
+
+  - from: "group_by_region"
+    to: "process_regions"
+
+  - from: "process_regions"
+    to: "sort_by_value"
+
+  - from: "sort_by_value"
+    to: "calculate_metrics"
+
+  - from: "calculate_metrics"
+    to: "flatten_orders"
+
+  - from: "flatten_orders"
+    to: "route_by_volume"
+
+  - from: "route_by_volume"
+    to: "parallel_processing"
+
+  # Parallel branches
+  - from: "parallel_processing"
+    to: "export_to_sheets"
+    branch: 1
+
+  - from: "parallel_processing"
+    to: "notify_slack_retry"
+    branch: 2
+
+  - from: "notify_slack_retry"
+    to: "notify_slack"
+
+  - from: "parallel_processing"
+    to: "update_calendar_safe"
+    branch: 3
+
+  - from: "update_calendar_safe"
+    to: "update_calendar"
+
+  # Merge branches
+  - from: "export_to_sheets"
+    to: "merge_results"
+
+  - from: "notify_slack"
+    to: "merge_results"
+
+  - from: "update_calendar"
+    to: "merge_results"
+
+  - from: "merge_results"
+    to: "delay_before_final"
+
+  - from: "delay_before_final"
+    to: "final_status"
+
+# Example test data
+test_data:
+  customers:
+    - id: "cust_001"
+      first_name: "Alice"
+      last_name: "Johnson"
+      email: "alice@example.com"
+      status: "active"
+      lifetime_value: 2500
+      region: "north"
+      created_at: "2023-01-15"
+
+    - id: "cust_002"
+      first_name: "Bob"
+      last_name: "Smith"
+      email: "bob@example.com"
+      status: "active"
+      lifetime_value: 1800
+      region: "south"
+      created_at: "2023-02-20"
+
+    - id: "cust_003"
+      first_name: "Charlie"
+      last_name: "Brown"
+      email: "charlie@example.com"
+      status: "inactive"
+      lifetime_value: 500
+      region: "east"
+      created_at: "2022-12-01"
+
+    - id: "cust_004"
+      first_name: "Diana"
+      last_name: "Prince"
+      email: "diana@example.com"
+      status: "active"
+      lifetime_value: 3200
+      region: "west"
+      created_at: "2023-03-10"
+
+    - id: "cust_005"
+      first_name: "Edward"
+      last_name: "Norton"
+      email: "edward@example.com"
+      status: "active"
+      lifetime_value: 1500
+      region: "north"
+      created_at: "2023-04-05"
+
+  orders:
+    - order_id: "ord_001"
+      customer_id: "cust_001"
+      total: 450
+      items:
+        - product: "Widget A"
+          quantity: 2
+          price: 150
+        - product: "Widget B"
+          quantity: 1
+          price: 150
+
+    - order_id: "ord_002"
+      customer_id: "cust_002"
+      total: 220
+      items:
+        - product: "Widget C"
+          quantity: 4
+          price: 55
+
+    - order_id: "ord_003"
+      customer_id: "cust_004"
+      total: 890
+      items:
+        - product: "Widget D"
+          quantity: 1
+          price: 890
+
+# Expected outcomes for testing
+expected_results:
+  high_value_customers_count: 3  # Alice, Bob, Diana, Edward (>1000)
+  regions_processed: 3  # north, south, west (excluding east with inactive customer)
+  total_revenue_range:
+    min: 8000
+    max: 10000

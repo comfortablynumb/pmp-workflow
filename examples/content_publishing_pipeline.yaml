@@ -1,0 +1,319 @@
+name: Content Publishing Pipeline
+description: Automated content publishing workflow with AI generation, review, and multi-platform distribution
+
+nodes:
+  - id: trigger
+    node_type: manual_trigger
+    name: Start Content Publishing
+    parameters:
+      input_schema:
+        type: object
+        properties:
+          topic:
+            type: string
+          target_platforms:
+            type: array
+          content_type:
+            type: string
+
+  - id: generate_content
+    node_type: openai
+    name: Generate Content with AI
+    parameters:
+      credentials_name: openai_api
+      operation: chat_completion
+      model: gpt-4
+      messages:
+        - role: system
+          content: "You are a professional content writer. Create engaging content for the given topic."
+        - role: user
+          content: "Write a {{content_type}} about: {{topic}}"
+      temperature: 0.7
+      max_tokens: 2000
+
+  - id: extract_content
+    node_type: transform
+    name: Extract Generated Content
+    parameters:
+      path: "choices[0].message.content"
+
+  - id: save_to_sheets
+    node_type: google_sheets
+    name: Log Content to Tracking Sheet
+    parameters:
+      credentials_name: google_workspace
+      operation: append_values
+      spreadsheet_id: "{{$tracking_sheet_id}}"
+      range: "Content Log!A:E"
+      values:
+        - ["{{timestamp}}", "{{topic}}", "{{content_type}}", "draft", "{{$content}}"]
+
+  - id: create_review_doc
+    node_type: google_drive
+    name: Create Review Document
+    parameters:
+      credentials_name: google_workspace
+      operation: create_file
+      name: "Content Review - {{topic}}"
+      mime_type: "application/vnd.google-apps.document"
+      content: "{{$content}}"
+
+  - id: request_review
+    node_type: slack
+    name: Request Content Review
+    parameters:
+      credentials_name: slack_workspace
+      operation: send_message
+      channel: "#content-review"
+      text: "New content ready for review: {{topic}}"
+      blocks:
+        - type: "section"
+          text:
+            type: "mrkdwn"
+            text: "*Content Ready for Review*\n\n*Topic:* {{topic}}\n*Type:* {{content_type}}\n\nPlease review and approve."
+        - type: "actions"
+          elements:
+            - type: "button"
+              text:
+                type: "plain_text"
+                text: "Approve"
+              value: "approve"
+              action_id: "approve_content"
+            - type: "button"
+              text:
+                type: "plain_text"
+                text: "Reject"
+              value: "reject"
+              action_id: "reject_content"
+
+  - id: wait_for_approval
+    node_type: wait_webhook
+    name: Wait for Content Approval
+    parameters:
+      timeout_seconds: 7200  # 2 hours
+      webhook_path: "/webhooks/content/approval/{{$review_id}}"
+
+  - id: check_approval
+    node_type: switch
+    name: Check Approval Status
+    parameters:
+      switch_on: $approval_status
+      cases:
+        - value: "approved"
+          path: publish
+        - value: "rejected"
+          path: reject
+      default: reject
+
+  - id: prepare_platforms
+    node_type: transform
+    name: Prepare Platform Data
+    parameters:
+      template:
+        platforms: "{{target_platforms}}"
+        content: "{{$content}}"
+        topic: "{{topic}}"
+
+  - id: split_publishing
+    node_type: split
+    name: Publish to Multiple Platforms
+    parameters:
+      branches: 3
+      wait_for_all: true
+
+  - id: loop_platforms
+    node_type: loop
+    name: Iterate Through Platforms
+    parameters:
+      items: $target_platforms
+      item_variable: platform
+      index_variable: platform_index
+
+  - id: platform_switch
+    node_type: switch
+    name: Route to Platform
+    parameters:
+      switch_on: $platform
+      cases:
+        - value: "blog"
+          path: publish_blog
+        - value: "twitter"
+          path: publish_twitter
+        - value: "linkedin"
+          path: publish_linkedin
+        - value: "medium"
+          path: publish_medium
+      default: skip
+
+  - id: publish_blog
+    node_type: http_request
+    name: Publish to Blog
+    parameters:
+      url: "https://api.example.com/blog/posts"
+      method: POST
+      headers:
+        Authorization: "Bearer {{$blog_token}}"
+      body:
+        title: "{{topic}}"
+        content: "{{$content}}"
+        status: "published"
+
+  - id: publish_twitter
+    node_type: http_request
+    name: Publish to Twitter
+    parameters:
+      url: "https://api.twitter.com/2/tweets"
+      method: POST
+      headers:
+        Authorization: "Bearer {{$twitter_token}}"
+      body:
+        text: "{{$content_summary}}\n\nRead more: {{$blog_url}}"
+
+  - id: publish_linkedin
+    node_type: http_request
+    name: Publish to LinkedIn
+    parameters:
+      url: "https://api.linkedin.com/v2/ugcPosts"
+      method: POST
+      headers:
+        Authorization: "Bearer {{$linkedin_token}}"
+      body:
+        author: "urn:li:person:{{$linkedin_id}}"
+        lifecycleState: "PUBLISHED"
+        specificContent:
+          com.linkedin.ugc.ShareContent:
+            shareCommentary:
+              text: "{{$content}}"
+
+  - id: publish_medium
+    node_type: http_request
+    name: Publish to Medium
+    parameters:
+      url: "https://api.medium.com/v1/users/{{$medium_user_id}}/posts"
+      method: POST
+      headers:
+        Authorization: "Bearer {{$medium_token}}"
+      body:
+        title: "{{topic}}"
+        contentFormat: "markdown"
+        content: "{{$content}}"
+        publishStatus: "public"
+
+  - id: merge_results
+    node_type: merge
+    name: Merge Publishing Results
+    parameters:
+      strategy: "all"
+      combine_mode: "array"
+      timeout: 300
+
+  - id: update_tracking
+    node_type: google_sheets
+    name: Update Publication Status
+    parameters:
+      credentials_name: google_workspace
+      operation: write_values
+      spreadsheet_id: "{{$tracking_sheet_id}}"
+      range: "Content Log!D{{$row_number}}"
+      values:
+        - ["published"]
+
+  - id: notify_success
+    node_type: slack
+    name: Notify Publication Success
+    parameters:
+      credentials_name: slack_workspace
+      operation: send_message
+      channel: "#content-team"
+      text: "Content published successfully: {{topic}}"
+
+  - id: delay_analytics
+    node_type: delay
+    name: Wait Before Analytics Check
+    parameters:
+      duration_seconds: 3600  # Wait 1 hour
+
+  - id: fetch_analytics
+    node_type: http_request
+    name: Fetch Content Analytics
+    parameters:
+      url: "https://api.analytics.example.com/content/{{$content_id}}/stats"
+      method: GET
+
+  - id: notify_rejection
+    node_type: slack
+    name: Notify Content Rejection
+    parameters:
+      credentials_name: slack_workspace
+      operation: send_message
+      channel: "#content-team"
+      text: "Content rejected: {{topic}}. Reason: {{$rejection_reason}}"
+
+  - id: complete
+    node_type: transform
+    name: Finalize Workflow
+    parameters:
+      template:
+        status: "completed"
+        topic: "{{topic}}"
+        published_at: "{{timestamp}}"
+
+edges:
+  - from: trigger
+    to: generate_content
+  - from: generate_content
+    to: extract_content
+  - from: extract_content
+    to: save_to_sheets
+  - from: save_to_sheets
+    to: create_review_doc
+  - from: create_review_doc
+    to: request_review
+  - from: request_review
+    to: wait_for_approval
+  - from: wait_for_approval
+    to: check_approval
+  - from: check_approval
+    to: prepare_platforms
+    to_input: publish
+  - from: check_approval
+    to: notify_rejection
+    to_input: reject
+  - from: prepare_platforms
+    to: split_publishing
+  - from: split_publishing
+    to: loop_platforms
+  - from: loop_platforms
+    to: platform_switch
+  - from: platform_switch
+    to: publish_blog
+    to_input: publish_blog
+  - from: platform_switch
+    to: publish_twitter
+    to_input: publish_twitter
+  - from: platform_switch
+    to: publish_linkedin
+    to_input: publish_linkedin
+  - from: platform_switch
+    to: publish_medium
+    to_input: publish_medium
+  - from: publish_blog
+    to: merge_results
+  - from: publish_twitter
+    to: merge_results
+  - from: publish_linkedin
+    to: merge_results
+  - from: publish_medium
+    to: merge_results
+  - from: merge_results
+    to: update_tracking
+  - from: update_tracking
+    to: notify_success
+  - from: notify_success
+    to: delay_analytics
+  - from: delay_analytics
+    to: fetch_analytics
+  - from: fetch_analytics
+    to: complete
+  - from: notify_rejection
+    to: complete

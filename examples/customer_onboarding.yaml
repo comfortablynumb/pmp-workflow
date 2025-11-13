@@ -1,0 +1,212 @@
+name: Customer Onboarding Workflow
+description: Automated customer onboarding process with multi-step verification and notifications
+
+nodes:
+  - id: trigger
+    node_type: webhook_trigger
+    name: New Customer Signup
+    parameters:
+      path: /webhooks/customer/signup
+
+  - id: validate_customer
+    node_type: switch
+    name: Validate Customer Type
+    parameters:
+      switch_on: customer_type
+      cases:
+        - value: "enterprise"
+          path: enterprise_flow
+        - value: "business"
+          path: business_flow
+        - value: "individual"
+          path: individual_flow
+      default: individual_flow
+
+  - id: create_account
+    node_type: http_request
+    name: Create Account in System
+    parameters:
+      url: "https://api.example.com/accounts"
+      method: POST
+      body:
+        email: "{{email}}"
+        name: "{{name}}"
+        type: "{{customer_type}}"
+
+  - id: setup_workspace
+    node_type: transform
+    name: Prepare Workspace Data
+    parameters:
+      template:
+        workspace_id: "ws_{{$account_id}}"
+        default_settings:
+          timezone: "UTC"
+          language: "en"
+          theme: "light"
+
+  - id: create_sheets
+    node_type: google_sheets
+    name: Create Customer Tracking Sheet
+    parameters:
+      credentials_name: google_workspace
+      operation: create_spreadsheet
+      title: "Customer {{name}} - Onboarding"
+
+  - id: add_calendar_event
+    node_type: google_calendar
+    name: Schedule Onboarding Call
+    parameters:
+      credentials_name: google_workspace
+      operation: create_event
+      summary: "Onboarding Call - {{name}}"
+      description: "Initial onboarding call for new customer"
+      start_time: "{{onboarding_date}}T14:00:00Z"
+      end_time: "{{onboarding_date}}T15:00:00Z"
+      attendees:
+        - "{{email}}"
+        - "success@example.com"
+
+  - id: send_welcome_email
+    node_type: gmail
+    name: Send Welcome Email
+    parameters:
+      credentials_name: gmail_account
+      operation: send_email
+      to: ["{{email}}"]
+      subject: "Welcome to Our Platform!"
+      body: |
+        Hi {{name}},
+
+        Welcome to our platform! Your account has been created successfully.
+
+        Your workspace ID: {{$workspace_id}}
+        Onboarding call scheduled for: {{onboarding_date}}
+
+        Best regards,
+        The Team
+
+  - id: create_slack_channel
+    node_type: slack
+    name: Create Customer Slack Channel
+    parameters:
+      credentials_name: slack_workspace
+      operation: create_channel
+      channel: "customer-{{$account_id}}"
+      is_private: false
+
+  - id: notify_team
+    node_type: slack
+    name: Notify Success Team
+    parameters:
+      credentials_name: slack_workspace
+      operation: send_message
+      channel: "#customer-success"
+      text: "New customer onboarded: {{name}} ({{customer_type}})"
+      blocks:
+        - type: "section"
+          text:
+            type: "mrkdwn"
+            text: "*New Customer Onboarded*\n\n*Name:* {{name}}\n*Email:* {{email}}\n*Type:* {{customer_type}}\n*Workspace:* {{$workspace_id}}"
+
+  - id: create_jira_ticket
+    node_type: jira
+    name: Create Onboarding Ticket
+    parameters:
+      credentials_name: jira_cloud
+      operation: create_issue
+      project_key: "CS"
+      issue_type: "Task"
+      summary: "Onboarding: {{name}}"
+      description: |
+        New customer onboarding task
+
+        Customer: {{name}}
+        Email: {{email}}
+        Type: {{customer_type}}
+        Workspace ID: {{$workspace_id}}
+
+        Complete onboarding checklist.
+      assignee: "{{$assigned_csm}}"
+
+  - id: wait_for_verification
+    node_type: wait_webhook
+    name: Wait for Email Verification
+    parameters:
+      timeout_seconds: 86400  # 24 hours
+      webhook_path: "/webhooks/customer/verify/{{$account_id}}"
+
+  - id: verification_check
+    node_type: switch
+    name: Check Verification Status
+    parameters:
+      switch_on: $verified
+      cases:
+        - value: true
+          path: verified_path
+        - value: false
+          path: unverified_path
+      default: unverified_path
+
+  - id: send_verification_success
+    node_type: gmail
+    name: Send Verification Success Email
+    parameters:
+      credentials_name: gmail_account
+      operation: send_email
+      to: ["{{email}}"]
+      subject: "Email Verified - Account Activated"
+      body: "Your email has been verified and your account is now fully activated!"
+
+  - id: send_verification_reminder
+    node_type: gmail
+    name: Send Verification Reminder
+    parameters:
+      credentials_name: gmail_account
+      operation: send_email
+      to: ["{{email}}"]
+      subject: "Please Verify Your Email"
+      body: "Your account is awaiting email verification. Please check your inbox."
+
+  - id: complete
+    node_type: transform
+    name: Finalize Onboarding
+    parameters:
+      template:
+        status: "completed"
+        account_id: "{{$account_id}}"
+        workspace_id: "{{$workspace_id}}"
+        onboarded_at: "{{timestamp}}"
+
+edges:
+  - from: trigger
+    to: validate_customer
+  - from: validate_customer
+    to: create_account
+  - from: create_account
+    to: setup_workspace
+  - from: setup_workspace
+    to: create_sheets
+  - from: create_sheets
+    to: add_calendar_event
+  - from: add_calendar_event
+    to: send_welcome_email
+  - from: send_welcome_email
+    to: create_slack_channel
+  - from: create_slack_channel
+    to: notify_team
+  - from: notify_team
+    to: create_jira_ticket
+  - from: create_jira_ticket
+    to: wait_for_verification
+  - from: wait_for_verification
+    to: verification_check
+  - from: verification_check
+    to: send_verification_success
+    to_input: verified_path
+  - from: verification_check
+    to: send_verification_reminder
+    to_input: unverified_path
+  - from: send_verification_success
+    to: complete
+  - from: send_verification_reminder
+    to: complete
