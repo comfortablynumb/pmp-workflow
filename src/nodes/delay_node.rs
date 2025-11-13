@@ -144,16 +144,16 @@ impl Node for DelayNode {
         }
 
         // Validate reasonable limits
-        if let Some(seconds) = params.duration_seconds {
-            if seconds > 3600 {
-                anyhow::bail!("duration_seconds cannot exceed 3600 (1 hour)");
-            }
+        if let Some(seconds) = params.duration_seconds
+            && seconds > 3600
+        {
+            anyhow::bail!("duration_seconds cannot exceed 3600 (1 hour)");
         }
 
-        if let Some(ms) = params.duration_milliseconds {
-            if ms > 3_600_000 {
-                anyhow::bail!("duration_milliseconds cannot exceed 3600000 (1 hour)");
-            }
+        if let Some(ms) = params.duration_milliseconds
+            && ms > 3_600_000
+        {
+            anyhow::bail!("duration_milliseconds cannot exceed 3600000 (1 hour)");
         }
 
         Ok(())

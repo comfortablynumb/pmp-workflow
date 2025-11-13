@@ -94,16 +94,16 @@ impl Node for MergeNode {
     fn validate_parameters(&self, parameters: &Value) -> anyhow::Result<()> {
         let params: MergeParams = serde_json::from_value(parameters.clone())?;
 
-        if let Some(strategy) = &params.strategy {
-            if !["all", "any", "majority"].contains(&strategy.as_str()) {
-                anyhow::bail!("strategy must be 'all', 'any', or 'majority'");
-            }
+        if let Some(strategy) = &params.strategy
+            && !["all", "any", "majority"].contains(&strategy.as_str())
+        {
+            anyhow::bail!("strategy must be 'all', 'any', or 'majority'");
         }
 
-        if let Some(mode) = &params.combine_mode {
-            if !["array", "object", "first", "last"].contains(&mode.as_str()) {
-                anyhow::bail!("combine_mode must be 'array', 'object', 'first', or 'last'");
-            }
+        if let Some(mode) = &params.combine_mode
+            && !["array", "object", "first", "last"].contains(&mode.as_str())
+        {
+            anyhow::bail!("combine_mode must be 'array', 'object', 'first', or 'last'");
         }
 
         Ok(())

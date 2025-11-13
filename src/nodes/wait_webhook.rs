@@ -117,17 +117,17 @@ impl Node for WaitWebhookNode {
         let params: WaitWebhookParams = serde_json::from_value(parameters.clone())?;
 
         // Validate timeout
-        if let Some(timeout) = params.timeout_seconds {
-            if !(1..=86400).contains(&timeout) {
-                anyhow::bail!("timeout_seconds must be between 1 and 86400 (24 hours)");
-            }
+        if let Some(timeout) = params.timeout_seconds
+            && !(1..=86400).contains(&timeout)
+        {
+            anyhow::bail!("timeout_seconds must be between 1 and 86400 (24 hours)");
         }
 
         // Validate webhook path format
-        if let Some(path) = &params.webhook_path {
-            if !path.starts_with('/') {
-                anyhow::bail!("webhook_path must start with '/'");
-            }
+        if let Some(path) = &params.webhook_path
+            && !path.starts_with('/')
+        {
+            anyhow::bail!("webhook_path must start with '/'");
         }
 
         Ok(())

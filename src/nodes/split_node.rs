@@ -85,10 +85,10 @@ impl Node for SplitNode {
     fn validate_parameters(&self, parameters: &Value) -> anyhow::Result<()> {
         let params: SplitParams = serde_json::from_value(parameters.clone())?;
 
-        if let Some(branches) = params.branches {
-            if !(2..=10).contains(&branches) {
-                anyhow::bail!("branches must be between 2 and 10");
-            }
+        if let Some(branches) = params.branches
+            && !(2..=10).contains(&branches)
+        {
+            anyhow::bail!("branches must be between 2 and 10");
         }
 
         Ok(())

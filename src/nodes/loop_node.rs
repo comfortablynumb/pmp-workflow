@@ -149,10 +149,10 @@ impl Node for LoopNode {
         }
 
         // Validate max_iterations
-        if let Some(max) = params.max_iterations {
-            if !(1..=10000).contains(&max) {
-                anyhow::bail!("max_iterations must be between 1 and 10000");
-            }
+        if let Some(max) = params.max_iterations
+            && !(1..=10000).contains(&max)
+        {
+            anyhow::bail!("max_iterations must be between 1 and 10000");
         }
 
         Ok(())

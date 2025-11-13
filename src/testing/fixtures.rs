@@ -1,7 +1,6 @@
 use serde_json::{Value, json};
 
 /// Test data fixtures for common scenarios
-
 /// Sample user data
 pub fn user_fixture() -> Value {
     json!({
