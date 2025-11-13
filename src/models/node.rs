@@ -78,7 +78,7 @@ impl NodeContext {
     }
 }
 
-/// Node category - determines if a node is a trigger or action
+/// Node category - determines if a node is a trigger, action, or control flow
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeCategory {
     /// Trigger nodes - can be used as the first node in a workflow
@@ -87,6 +87,9 @@ pub enum NodeCategory {
     /// Action nodes - execute actions within a workflow
     /// Examples: http_request, transform, conditional
     Action,
+    /// Control flow nodes - manage workflow execution flow
+    /// Examples: loop, switch, merge, split, delay
+    Control,
 }
 
 /// Node subcategory - provides additional classification within a category

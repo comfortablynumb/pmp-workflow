@@ -1,0 +1,447 @@
+name: Incident Response Automation
+description: Automated incident detection, triage, and response workflow with team notifications
+
+nodes:
+  - id: trigger
+    node_type: webhook_trigger
+    name: Incident Alert Received
+    parameters:
+      path: /webhooks/incidents/alert
+
+  - id: parse_incident
+    node_type: transform
+    name: Parse Incident Data
+    parameters:
+      template:
+        incident_id: "INC-{{timestamp}}"
+        severity: "{{severity}}"
+        service: "{{service}}"
+        description: "{{description}}"
+        timestamp: "{{timestamp}}"
+
+  - id: severity_routing
+    node_type: switch
+    name: Route by Severity
+    parameters:
+      switch_on: $severity
+      cases:
+        - value: "critical"
+          path: critical_path
+        - value: "high"
+          path: high_path
+        - value: "medium"
+          path: medium_path
+        - value: "low"
+          path: low_path
+      default: medium_path
+
+  # Critical path - immediate response
+  - id: create_critical_jira
+    node_type: jira
+    name: Create Critical Incident Ticket
+    parameters:
+      credentials_name: jira_cloud
+      operation: create_issue
+      project_key: "INC"
+      issue_type: "Incident"
+      summary: "[CRITICAL] {{$service}} - {{$description}}"
+      description: |
+        **Critical Incident Detected**
+
+        Service: {{$service}}
+        Severity: {{$severity}}
+        Time: {{$timestamp}}
+
+        Description: {{$description}}
+
+        This requires immediate attention!
+      priority: "Highest"
+      labels: ["critical", "auto-created", "{{$service}}"]
+
+  - id: page_oncall
+    node_type: twilio
+    name: Page On-Call Engineer
+    parameters:
+      credentials_name: twilio_account
+      operation: make_call
+      to: "{{$oncall_phone}}"
+      from: "{{$twilio_number}}"
+      twiml_url: "https://api.example.com/twiml/incident-alert"
+
+  - id: send_critical_slack
+    node_type: slack
+    name: Alert in Slack (Critical)
+    parameters:
+      credentials_name: slack_workspace
+      operation: send_message
+      channel: "#incidents-critical"
+      text: "@channel CRITICAL INCIDENT: {{$service}}"
+      blocks:
+        - type: "header"
+          text:
+            type: "plain_text"
+            text: "🚨 CRITICAL INCIDENT"
+        - type: "section"
+          fields:
+            - type: "mrkdwn"
+              text: "*Service:*\n{{$service}}"
+            - type: "mrkdwn"
+              text: "*Severity:*\nCritical"
+            - type: "mrkdwn"
+              text: "*Incident ID:*\n{{$incident_id}}"
+            - type: "mrkdwn"
+              text: "*Time:*\n{{$timestamp}}"
+          text:
+            type: "mrkdwn"
+            text: "*Description:*\n{{$description}}"
+        - type: "actions"
+          elements:
+            - type: "button"
+              text:
+                type: "plain_text"
+                text: "Acknowledge"
+              style: "primary"
+              value: "{{$incident_id}}"
+              action_id: "ack_incident"
+            - type: "button"
+              text:
+                type: "plain_text"
+                text: "View Details"
+              url: "https://dashboard.example.com/incidents/{{$incident_id}}"
+
+  - id: create_war_room
+    node_type: slack
+    name: Create Incident War Room
+    parameters:
+      credentials_name: slack_workspace
+      operation: create_channel
+      channel: "incident-{{$incident_id}}"
+      is_private: false
+
+  # Medium/High path - standard response
+  - id: create_standard_jira
+    node_type: jira
+    name: Create Incident Ticket
+    parameters:
+      credentials_name: jira_cloud
+      operation: create_issue
+      project_key: "INC"
+      issue_type: "Incident"
+      summary: "[{{$severity}}] {{$service}} - {{$description}}"
+      description: |
+        **Incident Detected**
+
+        Service: {{$service}}
+        Severity: {{$severity}}
+        Time: {{$timestamp}}
+
+        Description: {{$description}}
+      labels: ["auto-created", "{{$service}}", "{{$severity}}"]
+
+  - id: send_standard_slack
+    node_type: slack
+    name: Alert in Slack
+    parameters:
+      credentials_name: slack_workspace
+      operation: send_message
+      channel: "#incidents"
+      text: "New incident: {{$service}} - {{$severity}}"
+
+  # Gather system diagnostics
+  - id: split_diagnostics
+    node_type: split
+    name: Run Parallel Diagnostics
+    parameters:
+      branches: 4
+      wait_for_all: true
+
+  - id: check_service_health
+    node_type: http_request
+    name: Check Service Health
+    parameters:
+      url: "https://api.example.com/health/{{$service}}"
+      method: GET
+
+  - id: query_logs
+    node_type: elasticsearch
+    name: Query Recent Logs
+    parameters:
+      credentials_name: elasticsearch_cluster
+      operation: search
+      index: "logs-{{$service}}-*"
+      query:
+        bool:
+          must:
+            - range:
+                timestamp:
+                  gte: "now-15m"
+          filter:
+            - term:
+                service: "{{$service}}"
+      size: 100
+
+  - id: check_metrics
+    node_type: http_request
+    name: Fetch Service Metrics
+    parameters:
+      url: "https://metrics.example.com/api/query"
+      method: GET
+      params:
+        query: "rate(errors{service='{{$service}}'}[5m])"
+
+  - id: query_database
+    node_type: mysql
+    name: Check Database Status
+    parameters:
+      credentials_name: mysql_prod
+      operation: execute_query
+      query: |
+        SELECT
+          COUNT(*) as active_connections,
+          AVG(query_time) as avg_query_time
+        FROM information_schema.processlist
+        WHERE db = '{{$service_db}}'
+
+  - id: merge_diagnostics
+    node_type: merge
+    name: Merge Diagnostic Results
+    parameters:
+      strategy: "all"
+      combine_mode: "object"
+      timeout: 60
+
+  - id: analyze_with_ai
+    node_type: openai
+    name: AI-Powered Root Cause Analysis
+    parameters:
+      credentials_name: openai_api
+      operation: chat_completion
+      model: gpt-4
+      messages:
+        - role: system
+          content: "You are an expert SRE analyzing incident data. Provide concise root cause analysis and recommendations."
+        - role: user
+          content: |
+            Analyze this incident:
+
+            Service: {{$service}}
+            Severity: {{$severity}}
+            Description: {{$description}}
+
+            Diagnostics:
+            {{$diagnostics}}
+
+            Provide:
+            1. Likely root cause
+            2. Impact assessment
+            3. Recommended actions
+      temperature: 0.3
+      max_tokens: 500
+
+  - id: update_jira_with_analysis
+    node_type: jira
+    name: Add Analysis to Ticket
+    parameters:
+      credentials_name: jira_cloud
+      operation: add_comment
+      issue_key: "{{$jira_issue_key}}"
+      comment: |
+        **AI-Powered Analysis**
+
+        {{$ai_analysis}}
+
+        **Diagnostic Data**
+        - Health Check: {{$health_status}}
+        - Recent Errors: {{$error_count}}
+        - Active Connections: {{$db_connections}}
+
+  - id: update_status_page
+    node_type: http_request
+    name: Update Status Page
+    parameters:
+      url: "https://api.statuspage.io/v1/pages/{{$page_id}}/incidents"
+      method: POST
+      headers:
+        Authorization: "OAuth {{$statuspage_token}}"
+      body:
+        incident:
+          name: "{{$service}} - {{$description}}"
+          status: "investigating"
+          impact: "{{$severity}}"
+          body: "We are investigating reports of issues with {{$service}}."
+
+  - id: loop_affected_customers
+    node_type: loop
+    name: Notify Affected Customers
+    parameters:
+      items: $affected_customers
+      item_variable: customer
+      max_iterations: 100
+
+  - id: send_customer_email
+    node_type: gmail
+    name: Send Customer Notification
+    parameters:
+      credentials_name: gmail_account
+      operation: send_email
+      to: ["{{$customer.email}}"]
+      subject: "Service Update - {{$service}}"
+      body: |
+        Dear {{$customer.name}},
+
+        We are currently investigating an issue with {{$service}} that may be affecting your service.
+
+        Incident ID: {{$incident_id}}
+        Status: Investigating
+        Started: {{$timestamp}}
+
+        We will keep you updated as we work to resolve this issue.
+
+        Thank you for your patience.
+
+  - id: create_calendar_postmortem
+    node_type: google_calendar
+    name: Schedule Postmortem Meeting
+    parameters:
+      credentials_name: google_workspace
+      operation: create_event
+      summary: "Postmortem: {{$incident_id}}"
+      description: |
+        Post-incident review for {{$incident_id}}
+
+        Service: {{$service}}
+        Severity: {{$severity}}
+
+        Please come prepared to discuss root cause and preventive measures.
+      start_time: "{{$postmortem_time}}"
+      end_time: "{{$postmortem_end_time}}"
+      attendees:
+        - "engineering@example.com"
+        - "sre@example.com"
+
+  - id: wait_for_resolution
+    node_type: wait_webhook
+    name: Wait for Incident Resolution
+    parameters:
+      timeout_seconds: 14400  # 4 hours
+      webhook_path: "/webhooks/incidents/{{$incident_id}}/resolve"
+
+  - id: close_incident
+    node_type: jira
+    name: Close Incident Ticket
+    parameters:
+      credentials_name: jira_cloud
+      operation: transition_issue
+      issue_key: "{{$jira_issue_key}}"
+      transition: "Done"
+      comment: "Incident resolved. Duration: {{$resolution_time}}"
+
+  - id: update_status_resolved
+    node_type: http_request
+    name: Mark Status Page Resolved
+    parameters:
+      url: "https://api.statuspage.io/v1/pages/{{$page_id}}/incidents/{{$statuspage_incident_id}}"
+      method: PATCH
+      headers:
+        Authorization: "OAuth {{$statuspage_token}}"
+      body:
+        incident:
+          status: "resolved"
+          body: "The issue has been resolved. All systems are operating normally."
+
+  - id: send_resolution_slack
+    node_type: slack
+    name: Notify Resolution
+    parameters:
+      credentials_name: slack_workspace
+      operation: send_message
+      channel: "#incidents"
+      text: "✅ Incident {{$incident_id}} has been resolved"
+
+  - id: complete
+    node_type: transform
+    name: Finalize Incident Response
+    parameters:
+      template:
+        status: "completed"
+        incident_id: "{{$incident_id}}"
+        resolved_at: "{{timestamp}}"
+        duration: "{{$resolution_time}}"
+
+edges:
+  - from: trigger
+    to: parse_incident
+  - from: parse_incident
+    to: severity_routing
+
+  # Critical path
+  - from: severity_routing
+    to: create_critical_jira
+    to_input: critical_path
+  - from: create_critical_jira
+    to: page_oncall
+  - from: page_oncall
+    to: send_critical_slack
+  - from: send_critical_slack
+    to: create_war_room
+  - from: create_war_room
+    to: split_diagnostics
+
+  # Standard path
+  - from: severity_routing
+    to: create_standard_jira
+    to_input: medium_path
+  - from: severity_routing
+    to: create_standard_jira
+    to_input: high_path
+  - from: severity_routing
+    to: create_standard_jira
+    to_input: low_path
+  - from: create_standard_jira
+    to: send_standard_slack
+  - from: send_standard_slack
+    to: split_diagnostics
+
+  # Diagnostics
+  - from: split_diagnostics
+    to: check_service_health
+  - from: split_diagnostics
+    to: query_logs
+  - from: split_diagnostics
+    to: check_metrics
+  - from: split_diagnostics
+    to: query_database
+  - from: check_service_health
+    to: merge_diagnostics
+  - from: query_logs
+    to: merge_diagnostics
+  - from: check_metrics
+    to: merge_diagnostics
+  - from: query_database
+    to: merge_diagnostics
+
+  # Analysis and updates
+  - from: merge_diagnostics
+    to: analyze_with_ai
+  - from: analyze_with_ai
+    to: update_jira_with_analysis
+  - from: update_jira_with_analysis
+    to: update_status_page
+  - from: update_status_page
+    to: loop_affected_customers
+  - from: loop_affected_customers
+    to: send_customer_email
+  - from: send_customer_email
+    to: create_calendar_postmortem
+  - from: create_calendar_postmortem
+    to: wait_for_resolution
+
+  # Resolution
+  - from: wait_for_resolution
+    to: close_incident
+  - from: close_incident
+    to: update_status_resolved
+  - from: update_status_resolved
+    to: send_resolution_slack
+  - from: send_resolution_slack
+    to: complete

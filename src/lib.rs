@@ -4,6 +4,7 @@ pub mod execution;
 pub mod models;
 pub mod nodes;
 pub mod server;
+pub mod testing;
 
 pub use execution::*;
 pub use models::*;
