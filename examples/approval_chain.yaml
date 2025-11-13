@@ -1,0 +1,504 @@
+name: "Multi-Level Approval Chain"
+description: "Approval workflow with escalation, delegation, and audit trail"
+version: "1.0.0"
+
+# Trigger: Approval request submitted
+trigger:
+  type: "webhook_trigger"
+  config:
+    path: "/webhooks/approvals/request"
+    method: "POST"
+
+nodes:
+  # 1. Receive approval request
+  - id: "receive_request"
+    type: "manual_trigger"
+    name: "Receive Approval Request"
+    parameters:
+      description: "New approval request submitted"
+
+  # 2. Validate request
+  - id: "validate_request"
+    type: "assertion"
+    name: "Validate Approval Request"
+    parameters:
+      operation: "assert_exists"
+      field_path: "request.amount"
+      error_message: "Request must include amount"
+
+  # 3. Create approval record
+  - id: "create_approval"
+    type: "database_query"
+    name: "Create Approval Record"
+    parameters:
+      credentials_name: "approvals_db"
+      query: |
+        INSERT INTO approval_requests
+        (request_type, amount, requester_id, department, description,
+         status, created_at, urgency)
+        VALUES (:type, :amount, :requester_id, :dept, :desc, 'pending', NOW(), :urgency)
+        RETURNING id, approval_level_required
+      parameters:
+        type: "{{request.type}}"
+        amount: "{{request.amount}}"
+        requester_id: "{{request.requester_id}}"
+        dept: "{{request.department}}"
+        desc: "{{request.description}}"
+        urgency: "{{request.urgency || 'normal'}}"
+
+  # 4. Determine approval levels based on amount
+  - id: "determine_levels"
+    type: "switch"
+    name: "Determine Approval Levels"
+    parameters:
+      switch_on: "{{request.amount}}"
+      cases:
+        - value: "level_1"  # Manager only
+          condition:
+            type: "less_than"
+            threshold: 1000
+        - value: "level_2"  # Manager + Director
+          condition:
+            type: "less_than"
+            threshold: 10000
+        - value: "level_3"  # Manager + Director + VP
+          condition:
+            type: "less_than"
+            threshold: 50000
+        - value: "level_4"  # Full chain + CEO
+          condition:
+            type: "greater_than_or_equal"
+            threshold: 50000
+      default: "level_2"
+
+  # 5. Start approval chain audit
+  - id: "start_audit"
+    type: "audit_trail"
+    name: "Start Approval Audit"
+    parameters:
+      operation: "log_action"
+      action_type: "approval_request_created"
+      resource_id: "{{create_approval.id}}"
+      user_id: "{{request.requester_id}}"
+      details:
+        amount: "{{request.amount}}"
+        type: "{{request.type}}"
+        approval_level: "{{determine_levels.value}}"
+
+  # LEVEL 1: Manager Approval
+  - id: "notify_manager"
+    type: "sendgrid"
+    name: "Notify Manager"
+    parameters:
+      operation: "send_template_email"
+      credentials_name: "sendgrid_production"
+      to: "{{request.manager_email}}"
+      from: "approvals@example.com"
+      template_id: "approval_request"
+      template_data:
+        approver_name: "{{request.manager_name}}"
+        requester_name: "{{request.requester_name}}"
+        amount: "{{request.amount}}"
+        description: "{{request.description}}"
+        approval_link: "https://approvals.example.com/review/{{create_approval.id}}"
+
+  # 6. Wait for manager approval (with timeout)
+  - id: "wait_manager_approval"
+    type: "timeout"
+    name: "Wait for Manager Approval"
+    parameters:
+      timeout_seconds: 172800  # 48 hours
+      on_timeout: "escalate"
+
+  - id: "manager_approval_webhook"
+    type: "wait_webhook"
+    name: "Manager Approval Webhook"
+    parameters:
+      timeout_seconds: 172800
+      webhook_path: "/webhooks/approvals/{{create_approval.id}}/manager"
+
+  # 7. Process manager decision
+  - id: "process_manager_decision"
+    type: "switch"
+    name: "Process Manager Decision"
+    parameters:
+      switch_on: "{{manager_approval_webhook.decision}}"
+      cases:
+        - value: "approved"
+        - value: "rejected"
+        - value: "delegated"
+      default: "escalated"
+
+  # 8. If rejected, notify requester
+  - id: "notify_rejection"
+    type: "sendgrid"
+    name: "Notify Rejection"
+    parameters:
+      operation: "send_email"
+      credentials_name: "sendgrid_production"
+      to: "{{request.requester_email}}"
+      from: "approvals@example.com"
+      subject: "Approval Request Rejected"
+      content: |
+        Your approval request for {{request.type}} has been rejected.
+
+        Amount: ${{request.amount}}
+        Rejected by: {{manager_approval_webhook.approver_name}}
+        Reason: {{manager_approval_webhook.rejection_reason}}
+
+  # 9. Update rejection status
+  - id: "update_rejected"
+    type: "database_query"
+    name: "Update Status to Rejected"
+    parameters:
+      credentials_name: "approvals_db"
+      query: "UPDATE approval_requests SET status = 'rejected', rejected_by = :approver, rejection_reason = :reason, updated_at = NOW() WHERE id = :id"
+      parameters:
+        id: "{{create_approval.id}}"
+        approver: "{{manager_approval_webhook.approver_id}}"
+        reason: "{{manager_approval_webhook.rejection_reason}}"
+
+  # 10. If delegated, reassign
+  - id: "delegate_approval"
+    type: "database_query"
+    name: "Delegate to Another Approver"
+    parameters:
+      credentials_name: "approvals_db"
+      query: "UPDATE approval_requests SET assigned_to = :new_approver, delegated_by = :delegator, updated_at = NOW() WHERE id = :id"
+      parameters:
+        id: "{{create_approval.id}}"
+        new_approver: "{{manager_approval_webhook.delegate_to}}"
+        delegator: "{{manager_approval_webhook.approver_id}}"
+
+  # LEVEL 2: Director Approval
+  - id: "check_level_2_required"
+    type: "assertion"
+    name: "Check if Level 2 Required"
+    parameters:
+      operation: "assert_contains"
+      actual_value: "{{determine_levels.value}}"
+      expected_value: "level_2,level_3,level_4"
+      continue_on_failure: true
+
+  - id: "notify_director"
+    type: "sendgrid"
+    name: "Notify Director"
+    parameters:
+      operation: "send_template_email"
+      credentials_name: "sendgrid_production"
+      to: "{{request.director_email}}"
+      from: "approvals@example.com"
+      template_id: "approval_request"
+      template_data:
+        approver_name: "{{request.director_name}}"
+        requester_name: "{{request.requester_name}}"
+        amount: "{{request.amount}}"
+        description: "{{request.description}}"
+        previous_approver: "{{manager_approval_webhook.approver_name}}"
+        approval_link: "https://approvals.example.com/review/{{create_approval.id}}"
+
+  - id: "wait_director_approval"
+    type: "wait_webhook"
+    name: "Director Approval Webhook"
+    parameters:
+      timeout_seconds: 172800
+      webhook_path: "/webhooks/approvals/{{create_approval.id}}/director"
+
+  - id: "process_director_decision"
+    type: "switch"
+    name: "Process Director Decision"
+    parameters:
+      switch_on: "{{wait_director_approval.decision}}"
+      cases:
+        - value: "approved"
+        - value: "rejected"
+      default: "escalated"
+
+  # LEVEL 3: VP Approval
+  - id: "check_level_3_required"
+    type: "assertion"
+    name: "Check if Level 3 Required"
+    parameters:
+      operation: "assert_contains"
+      actual_value: "{{determine_levels.value}}"
+      expected_value: "level_3,level_4"
+      continue_on_failure: true
+
+  - id: "notify_vp"
+    type: "slack"
+    name: "Notify VP (Slack)"
+    parameters:
+      operation: "send_message"
+      credentials_name: "slack_workspace"
+      channel: "@{{request.vp_slack_id}}"
+      message: |
+        🔔 High-Value Approval Request
+
+        Type: {{request.type}}
+        Amount: ${{request.amount}}
+        Requester: {{request.requester_name}}
+
+        Previous Approvals:
+        ✅ Manager: {{manager_approval_webhook.approver_name}}
+        ✅ Director: {{wait_director_approval.approver_name}}
+
+        Review: https://approvals.example.com/review/{{create_approval.id}}
+
+  - id: "wait_vp_approval"
+    type: "wait_webhook"
+    name: "VP Approval Webhook"
+    parameters:
+      timeout_seconds: 259200  # 72 hours
+      webhook_path: "/webhooks/approvals/{{create_approval.id}}/vp"
+
+  - id: "process_vp_decision"
+    type: "switch"
+    name: "Process VP Decision"
+    parameters:
+      switch_on: "{{wait_vp_approval.decision}}"
+      cases:
+        - value: "approved"
+        - value: "rejected"
+      default: "escalated"
+
+  # LEVEL 4: CEO Approval (Critical amounts)
+  - id: "check_level_4_required"
+    type: "assertion"
+    name: "Check if CEO Approval Required"
+    parameters:
+      operation: "assert_equals"
+      actual_value: "{{determine_levels.value}}"
+      expected_value: "level_4"
+      continue_on_failure: true
+
+  - id: "create_ceo_task"
+    type: "jira"
+    name: "Create CEO Approval Task"
+    parameters:
+      operation: "create_issue"
+      credentials_name: "jira_production"
+      project_key: "EXEC"
+      issue_type: "Task"
+      summary: "CEO Approval Required: {{request.type}} - ${{request.amount}}"
+      description: |
+        Critical approval request requiring CEO review.
+
+        Request Details:
+        - Type: {{request.type}}
+        - Amount: ${{request.amount}}
+        - Requester: {{request.requester_name}}
+        - Department: {{request.department}}
+
+        Previous Approvals:
+        - Manager: {{manager_approval_webhook.approver_name}}
+        - Director: {{wait_director_approval.approver_name}}
+        - VP: {{wait_vp_approval.approver_name}}
+
+        Review Link: https://approvals.example.com/review/{{create_approval.id}}
+      priority: "Highest"
+
+  - id: "notify_ceo"
+    type: "sendgrid"
+    name: "Notify CEO"
+    parameters:
+      operation: "send_email"
+      credentials_name: "sendgrid_production"
+      to: "{{company.ceo_email}}"
+      from: "approvals@example.com"
+      subject: "🚨 CEO Approval Required: ${{request.amount}}"
+      content: |
+        A critical approval request requires your review.
+
+        See Jira task: {{create_ceo_task.issue_key}}
+
+  - id: "wait_ceo_approval"
+    type: "wait_webhook"
+    name: "CEO Approval Webhook"
+    parameters:
+      timeout_seconds: 432000  # 5 days
+      webhook_path: "/webhooks/approvals/{{create_approval.id}}/ceo"
+
+  # FINAL APPROVAL
+  - id: "finalize_approval"
+    type: "database_query"
+    name: "Finalize Approval"
+    parameters:
+      credentials_name: "approvals_db"
+      query: |
+        UPDATE approval_requests
+        SET status = 'approved',
+            approved_at = NOW(),
+            final_approver = :approver
+        WHERE id = :id
+        RETURNING *
+      parameters:
+        id: "{{create_approval.id}}"
+        approver: "{{wait_ceo_approval.approver_id || wait_vp_approval.approver_id || wait_director_approval.approver_id || manager_approval_webhook.approver_id}}"
+
+  # Execute approved action
+  - id: "execute_approved_action"
+    type: "http_webhook"
+    name: "Execute Approved Action"
+    parameters:
+      url: "{{request.execution_webhook_url}}"
+      method: "send_post"
+      body:
+        approval_id: "{{create_approval.id}}"
+        request_type: "{{request.type}}"
+        amount: "{{request.amount}}"
+        approved_by: "{{finalize_approval.final_approver}}"
+
+  # Notification and audit
+  - id: "notify_completion"
+    type: "sendgrid"
+    name: "Notify Approval Completion"
+    parameters:
+      operation: "send_email"
+      credentials_name: "sendgrid_production"
+      to: "{{request.requester_email}}"
+      from: "approvals@example.com"
+      subject: "✅ Approval Request Approved"
+      content: |
+        Your approval request has been fully approved and executed.
+
+        Request ID: {{create_approval.id}}
+        Type: {{request.type}}
+        Amount: ${{request.amount}}
+        Final Approver: {{finalize_approval.final_approver_name}}
+
+        The requested action has been completed.
+
+  - id: "audit_completion"
+    type: "audit_trail"
+    name: "Audit Approval Completion"
+    parameters:
+      operation: "log_action"
+      action_type: "approval_completed"
+      resource_id: "{{create_approval.id}}"
+      user_id: "{{finalize_approval.final_approver}}"
+      severity: "info"
+      details:
+        approval_chain: "{{determine_levels.value}}"
+        total_time_seconds: "{{execution.duration_ms / 1000}}"
+        approvers:
+          - "{{manager_approval_webhook.approver_id}}"
+          - "{{wait_director_approval.approver_id}}"
+          - "{{wait_vp_approval.approver_id}}"
+          - "{{wait_ceo_approval.approver_id}}"
+
+  # Metrics
+  - id: "emit_metrics"
+    type: "metrics"
+    name: "Emit Approval Metrics"
+    parameters:
+      operation: "emit_histogram"
+      metric_name: "approvals.duration_seconds"
+      value: "{{execution.duration_ms / 1000}}"
+      tags:
+        approval_level: "{{determine_levels.value}}"
+        department: "{{request.department}}"
+        status: "approved"
+
+# Escalation handling
+escalation_rules:
+  - trigger: "timeout"
+    node: "wait_manager_approval"
+    action: "notify_next_level"
+
+  - trigger: "timeout"
+    node: "wait_director_approval"
+    action: "escalate_to_vp"
+
+  - trigger: "timeout"
+    node: "wait_vp_approval"
+    action: "pagerduty_alert"
+    severity: "high"
+
+connections:
+  - from: "receive_request"
+    to: "validate_request"
+  - from: "validate_request"
+    to: "create_approval"
+  - from: "create_approval"
+    to: "determine_levels"
+  - from: "determine_levels"
+    to: "start_audit"
+  - from: "start_audit"
+    to: "notify_manager"
+
+  # Manager approval
+  - from: "notify_manager"
+    to: "wait_manager_approval"
+  - from: "wait_manager_approval"
+    to: "manager_approval_webhook"
+  - from: "manager_approval_webhook"
+    to: "process_manager_decision"
+
+  # Rejection path
+  - from: "process_manager_decision"
+    to: "notify_rejection"
+    condition: "rejected"
+  - from: "notify_rejection"
+    to: "update_rejected"
+  - from: "update_rejected"
+    to: "audit_completion"
+
+  # Delegation path
+  - from: "process_manager_decision"
+    to: "delegate_approval"
+    condition: "delegated"
+  - from: "delegate_approval"
+    to: "notify_manager"
+
+  # Approval path
+  - from: "process_manager_decision"
+    to: "check_level_2_required"
+    condition: "approved"
+
+  # Level 2 - Director
+  - from: "check_level_2_required"
+    to: "notify_director"
+  - from: "notify_director"
+    to: "wait_director_approval"
+  - from: "wait_director_approval"
+    to: "process_director_decision"
+  - from: "process_director_decision"
+    to: "check_level_3_required"
+    condition: "approved"
+  - from: "process_director_decision"
+    to: "notify_rejection"
+    condition: "rejected"
+
+  # Level 3 - VP
+  - from: "check_level_3_required"
+    to: "notify_vp"
+  - from: "notify_vp"
+    to: "wait_vp_approval"
+  - from: "wait_vp_approval"
+    to: "process_vp_decision"
+  - from: "process_vp_decision"
+    to: "check_level_4_required"
+    condition: "approved"
+  - from: "process_vp_decision"
+    to: "notify_rejection"
+    condition: "rejected"
+
+  # Level 4 - CEO
+  - from: "check_level_4_required"
+    to: "create_ceo_task"
+  - from: "create_ceo_task"
+    to: "notify_ceo"
+  - from: "notify_ceo"
+    to: "wait_ceo_approval"
+  - from: "wait_ceo_approval"
+    to: "finalize_approval"
+
+  # Final execution
+  - from: "finalize_approval"
+    to: "execute_approved_action"
+  - from: "execute_approved_action"
+    to: "notify_completion"
+  - from: "notify_completion"
+    to: "audit_completion"
+  - from: "audit_completion"
+    to: "emit_metrics"
