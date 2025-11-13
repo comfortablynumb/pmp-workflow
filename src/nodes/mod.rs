@@ -66,7 +66,11 @@ pub mod try_catch;
 pub mod twilio;
 pub mod wait_webhook;
 pub mod webhook_trigger;
+pub mod workflow_debugger;
+pub mod workflow_runner;
+pub mod workflow_template;
 pub mod workflow_validator;
+pub mod workflow_visualizer;
 
 pub use anthropic::AnthropicNode;
 pub use assertion::AssertionNode;
@@ -136,7 +140,11 @@ pub use try_catch::TryCatchNode;
 pub use twilio::TwilioNode;
 pub use wait_webhook::WaitWebhookNode;
 pub use webhook_trigger::WebhookTriggerNode;
+pub use workflow_debugger::WorkflowDebuggerNode;
+pub use workflow_runner::WorkflowRunnerNode;
+pub use workflow_template::WorkflowTemplateNode;
 pub use workflow_validator::WorkflowValidatorNode;
+pub use workflow_visualizer::WorkflowVisualizerNode;
 
 use crate::models::NodeRegistry;
 use sqlx::PgPool;
@@ -255,6 +263,18 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("audit_trail", || Box::new(AuditTrailNode::new()));
     registry.register("performance_dashboard", || {
         Box::new(PerformanceDashboardNode::new())
+    });
+
+    // Developer experience
+    registry.register("workflow_runner", || Box::new(WorkflowRunnerNode::new()));
+    registry.register("workflow_visualizer", || {
+        Box::new(WorkflowVisualizerNode::new())
+    });
+    registry.register("workflow_debugger", || {
+        Box::new(WorkflowDebuggerNode::new())
+    });
+    registry.register("workflow_template", || {
+        Box::new(WorkflowTemplateNode::new())
     });
 
     // Sub-workflow execution (requires dependencies)

@@ -1,0 +1,392 @@
+name: "E-commerce Order Processing"
+description: "Complete order processing workflow: Order → Validation → Payment → Inventory → Fulfillment → Shipping → Notifications"
+version: "1.0.0"
+
+# Trigger: New order webhook
+trigger:
+  type: "webhook_trigger"
+  config:
+    path: "/webhooks/orders/new"
+    method: "POST"
+
+nodes:
+  # 1. Receive and validate order
+  - id: "receive_order"
+    type: "manual_trigger"
+    name: "Receive Order"
+    parameters:
+      description: "Webhook receives new order data"
+
+  # 2. Log order received
+  - id: "log_order_received"
+    type: "logging"
+    name: "Log Order Received"
+    parameters:
+      operation: "log_info"
+      message: "New order received"
+      context:
+        order_id: "{{order.id}}"
+        customer_id: "{{order.customer_id}}"
+        total: "{{order.total}}"
+
+  # 3. Validate order data
+  - id: "validate_order"
+    type: "assertion"
+    name: "Validate Order Data"
+    parameters:
+      operation: "assert_exists"
+      field_path: "order.items"
+      error_message: "Order must contain items"
+
+  # 4. Validate customer email
+  - id: "validate_email"
+    type: "assertion"
+    name: "Validate Customer Email"
+    parameters:
+      operation: "assert_regex_match"
+      actual_value: "{{order.customer.email}}"
+      expected_value: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      error_message: "Invalid customer email"
+
+  # 5. Check fraud score
+  - id: "fraud_check"
+    type: "http_webhook"
+    name: "Fraud Detection Check"
+    parameters:
+      url: "https://fraud-detection.example.com/api/check"
+      method: "send_post"
+      body:
+        order_id: "{{order.id}}"
+        amount: "{{order.total}}"
+        customer_ip: "{{order.customer_ip}}"
+      timeout_seconds: 10
+
+  # 6. Route based on fraud score
+  - id: "fraud_decision"
+    type: "switch"
+    name: "Fraud Decision Routing"
+    parameters:
+      switch_on: "{{fraud_check.risk_score}}"
+      cases:
+        - value: "low"
+          condition:
+            type: "less_than"
+            threshold: 30
+        - value: "medium"
+          condition:
+            type: "less_than"
+            threshold: 70
+        - value: "high"
+          condition:
+            type: "greater_than_or_equal"
+            threshold: 70
+      default: "medium"
+
+  # 7a. High fraud: Send for manual review
+  - id: "manual_review_alert"
+    type: "sendgrid"
+    name: "Alert: Manual Review Required"
+    parameters:
+      operation: "send_email"
+      to: "fraud-team@example.com"
+      from: "orders@example.com"
+      subject: "High Fraud Risk Order - Manual Review Required"
+      content: "Order {{order.id}} flagged for manual review. Risk score: {{fraud_check.risk_score}}"
+
+  # 7b. Low/Medium fraud: Continue with payment
+  - id: "process_payment"
+    type: "stripe"
+    name: "Process Payment"
+    parameters:
+      credentials_name: "stripe_production"
+      operation: "create_payment_intent"
+      amount: "{{order.total_cents}}"
+      currency: "usd"
+      customer_email: "{{order.customer.email}}"
+      metadata:
+        order_id: "{{order.id}}"
+
+  # 8. Retry payment if temporary failure
+  - id: "payment_retry"
+    type: "retry"
+    name: "Retry Payment on Failure"
+    parameters:
+      max_attempts: 3
+      initial_delay_ms: 2000
+      backoff_multiplier: 2.0
+      retry_on_errors: ["network_error", "timeout", "rate_limit"]
+
+  # 9. Confirm payment intent
+  - id: "confirm_payment"
+    type: "stripe"
+    name: "Confirm Payment Intent"
+    parameters:
+      credentials_name: "stripe_production"
+      operation: "confirm_payment_intent"
+      payment_intent_id: "{{process_payment.payment_intent_id}}"
+
+  # 10. Record payment in audit trail
+  - id: "audit_payment"
+    type: "audit_trail"
+    name: "Audit Payment"
+    parameters:
+      operation: "log_action"
+      action_type: "payment_processed"
+      resource_id: "{{order.id}}"
+      user_id: "{{order.customer_id}}"
+      details:
+        payment_intent: "{{process_payment.payment_intent_id}}"
+        amount: "{{order.total}}"
+        status: "{{confirm_payment.status}}"
+
+  # 11. Check inventory for all items
+  - id: "check_inventory"
+    type: "loop"
+    name: "Check Inventory for Each Item"
+    parameters:
+      items: "{{order.items}}"
+      item_variable: "item"
+      index_variable: "idx"
+
+  # 12. Query inventory database
+  - id: "query_inventory"
+    type: "database_query"
+    name: "Query Inventory Levels"
+    parameters:
+      credentials_name: "inventory_db"
+      query: "SELECT stock_quantity FROM inventory WHERE sku = :sku"
+      parameters:
+        sku: "{{item.sku}}"
+
+  # 13. Assert sufficient inventory
+  - id: "assert_inventory"
+    type: "assertion"
+    name: "Assert Sufficient Stock"
+    parameters:
+      operation: "assert_greater_than"
+      actual_value: "{{query_inventory.stock_quantity}}"
+      expected_value: "{{item.quantity}}"
+      error_message: "Insufficient stock for {{item.sku}}"
+
+  # 14. Reserve inventory
+  - id: "reserve_inventory"
+    type: "database_query"
+    name: "Reserve Inventory"
+    parameters:
+      credentials_name: "inventory_db"
+      query: "UPDATE inventory SET stock_quantity = stock_quantity - :qty, reserved = reserved + :qty WHERE sku = :sku"
+      parameters:
+        qty: "{{item.quantity}}"
+        sku: "{{item.sku}}"
+
+  # 15. Split fulfillment into parallel tasks
+  - id: "parallel_fulfillment"
+    type: "split"
+    name: "Parallel Fulfillment Tasks"
+    parameters:
+      branches: 3
+      wait_for_all: true
+
+  # 16a. Generate packing slip
+  - id: "generate_packing_slip"
+    type: "pdf_generator"
+    name: "Generate Packing Slip"
+    parameters:
+      operation: "generate_from_template"
+      template_name: "packing_slip"
+      output_path: "/tmp/packing_slip_{{order.id}}.pdf"
+      content:
+        order_id: "{{order.id}}"
+        items: "{{order.items}}"
+        shipping_address: "{{order.shipping_address}}"
+
+  # 16b. Generate shipping label
+  - id: "create_shipping_label"
+    type: "http_webhook"
+    name: "Create Shipping Label"
+    parameters:
+      url: "https://api.shipping-provider.com/v1/labels"
+      method: "send_post"
+      headers:
+        Authorization: "Bearer {{env.SHIPPING_API_KEY}}"
+      body:
+        order_id: "{{order.id}}"
+        destination: "{{order.shipping_address}}"
+        weight: "{{order.total_weight}}"
+        service_level: "{{order.shipping_method}}"
+
+  # 16c. Update order status in database
+  - id: "update_order_status"
+    type: "database_query"
+    name: "Update Order Status to Fulfilling"
+    parameters:
+      credentials_name: "orders_db"
+      query: "UPDATE orders SET status = 'fulfilling', updated_at = NOW() WHERE id = :id"
+      parameters:
+        id: "{{order.id}}"
+
+  # 17. Merge fulfillment results
+  - id: "merge_fulfillment"
+    type: "merge"
+    name: "Merge Fulfillment Results"
+    parameters:
+      strategy: "all"
+      combine_mode: "object"
+
+  # 18. Create shipment record
+  - id: "create_shipment"
+    type: "database_query"
+    name: "Create Shipment Record"
+    parameters:
+      credentials_name: "shipments_db"
+      query: "INSERT INTO shipments (order_id, tracking_number, carrier, label_url, status) VALUES (:order_id, :tracking, :carrier, :label_url, 'pending_pickup')"
+      parameters:
+        order_id: "{{order.id}}"
+        tracking: "{{create_shipping_label.tracking_number}}"
+        carrier: "{{create_shipping_label.carrier}}"
+        label_url: "{{create_shipping_label.label_url}}"
+
+  # 19. Send confirmation email to customer
+  - id: "send_confirmation_email"
+    type: "sendgrid"
+    name: "Send Order Confirmation"
+    parameters:
+      operation: "send_template_email"
+      credentials_name: "sendgrid_production"
+      to: "{{order.customer.email}}"
+      from: "orders@example.com"
+      template_id: "order_confirmation_v2"
+      template_data:
+        customer_name: "{{order.customer.name}}"
+        order_id: "{{order.id}}"
+        order_total: "{{order.total}}"
+        tracking_number: "{{create_shipping_label.tracking_number}}"
+        estimated_delivery: "{{create_shipping_label.estimated_delivery}}"
+
+  # 20. Send Slack notification to fulfillment team
+  - id: "notify_fulfillment_team"
+    type: "slack"
+    name: "Notify Fulfillment Team"
+    parameters:
+      operation: "send_message"
+      credentials_name: "slack_workspace"
+      channel: "#fulfillment"
+      message: |
+        🎉 New Order Ready for Fulfillment
+
+        Order ID: {{order.id}}
+        Customer: {{order.customer.name}}
+        Items: {{order.items.length}}
+        Total: ${{order.total}}
+
+        📦 Packing Slip: {{generate_packing_slip.url}}
+        🏷️ Shipping Label: {{create_shipping_label.label_url}}
+        📍 Tracking: {{create_shipping_label.tracking_number}}
+
+  # 21. Record performance metrics
+  - id: "record_metrics"
+    type: "performance_dashboard"
+    name: "Record Order Processing Time"
+    parameters:
+      operation: "record_execution_time"
+      workflow_id: "{{workflow.id}}"
+      execution_time_ms: "{{execution.duration_ms}}"
+
+  # 22. Emit order completed metric
+  - id: "emit_order_metric"
+    type: "metrics"
+    name: "Emit Order Completed Metric"
+    parameters:
+      operation: "emit_counter"
+      metric_name: "orders.completed"
+      value: 1
+      tags:
+        status: "success"
+        payment_method: "{{order.payment_method}}"
+        shipping_method: "{{order.shipping_method}}"
+
+connections:
+  - from: "receive_order"
+    to: "log_order_received"
+  - from: "log_order_received"
+    to: "validate_order"
+  - from: "validate_order"
+    to: "validate_email"
+  - from: "validate_email"
+    to: "fraud_check"
+  - from: "fraud_check"
+    to: "fraud_decision"
+
+  # Fraud routing
+  - from: "fraud_decision"
+    to: "manual_review_alert"
+    condition: "high"
+  - from: "fraud_decision"
+    to: "process_payment"
+    condition: "low,medium"
+
+  # Payment flow
+  - from: "process_payment"
+    to: "payment_retry"
+  - from: "payment_retry"
+    to: "confirm_payment"
+  - from: "confirm_payment"
+    to: "audit_payment"
+
+  # Inventory flow
+  - from: "audit_payment"
+    to: "check_inventory"
+  - from: "check_inventory"
+    to: "query_inventory"
+  - from: "query_inventory"
+    to: "assert_inventory"
+  - from: "assert_inventory"
+    to: "reserve_inventory"
+
+  # Fulfillment flow
+  - from: "reserve_inventory"
+    to: "parallel_fulfillment"
+  - from: "parallel_fulfillment"
+    to: "generate_packing_slip"
+    branch: 1
+  - from: "parallel_fulfillment"
+    to: "create_shipping_label"
+    branch: 2
+  - from: "parallel_fulfillment"
+    to: "update_order_status"
+    branch: 3
+
+  # Merge and complete
+  - from: "generate_packing_slip"
+    to: "merge_fulfillment"
+  - from: "create_shipping_label"
+    to: "merge_fulfillment"
+  - from: "update_order_status"
+    to: "merge_fulfillment"
+  - from: "merge_fulfillment"
+    to: "create_shipment"
+  - from: "create_shipment"
+    to: "send_confirmation_email"
+  - from: "send_confirmation_email"
+    to: "notify_fulfillment_team"
+  - from: "notify_fulfillment_team"
+    to: "record_metrics"
+  - from: "record_metrics"
+    to: "emit_order_metric"
+
+# Error handling
+error_handlers:
+  - node: "process_payment"
+    on_error: "retry"
+    max_retries: 3
+
+  - node: "assert_inventory"
+    on_error: "send_notification"
+    notification:
+      type: "slack"
+      channel: "#alerts"
+      message: "Out of stock: {{item.sku}}"
+
+  - node: "create_shipping_label"
+    on_error: "fallback"
+    fallback_node: "manual_shipping_process"

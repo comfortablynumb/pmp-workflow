@@ -1,0 +1,527 @@
+name: "A/B Testing Framework"
+description: "Split traffic, run experiments, collect metrics, and analyze results for A/B testing"
+version: "1.0.0"
+
+# Trigger: User visit or event
+trigger:
+  type: "webhook_trigger"
+  config:
+    path: "/webhooks/ab-test/visit"
+    method: "POST"
+
+nodes:
+  # 1. Receive user visit event
+  - id: "receive_visit"
+    type: "manual_trigger"
+    name: "Receive User Visit"
+    parameters:
+      description: "User visits page/feature being tested"
+
+  # 2. Start trace for experiment
+  - id: "start_trace"
+    type: "tracing"
+    name: "Start Experiment Trace"
+    parameters:
+      operation: "create_trace"
+      span_name: "ab_test_experiment"
+      attributes:
+        experiment_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+
+  # 3. Check if user already assigned to variant
+  - id: "check_existing_assignment"
+    type: "database_query"
+    name: "Check Existing Assignment"
+    parameters:
+      credentials_name: "experiments_db"
+      query: |
+        SELECT variant, assigned_at
+        FROM user_variant_assignments
+        WHERE experiment_id = :exp_id
+          AND user_id = :user_id
+          AND status = 'active'
+      parameters:
+        exp_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+
+  # 4. Get experiment configuration
+  - id: "get_experiment_config"
+    type: "database_query"
+    name: "Get Experiment Config"
+    parameters:
+      credentials_name: "experiments_db"
+      query: |
+        SELECT
+          id, name, variants, traffic_allocation,
+          targeting_rules, start_date, end_date, status
+        FROM experiments
+        WHERE id = :exp_id AND status = 'running'
+      parameters:
+        exp_id: "{{experiment.id}}"
+
+  # 5. Validate experiment is active
+  - id: "validate_experiment"
+    type: "assertion"
+    name: "Validate Experiment Active"
+    parameters:
+      operation: "assert_equals"
+      actual_value: "{{get_experiment_config.status}}"
+      expected_value: "running"
+      error_message: "Experiment is not currently running"
+
+  # 6. Check targeting rules
+  - id: "evaluate_targeting"
+    type: "transform"
+    name: "Evaluate Targeting Rules"
+    parameters:
+      expression: |
+        rules = get_experiment_config.targeting_rules
+        user_matches = true
+
+        if (rules.countries && !rules.countries.includes(user.country))
+          user_matches = false
+
+        if (rules.min_age && user.age < rules.min_age)
+          user_matches = false
+
+        if (rules.user_segments && !rules.user_segments.includes(user.segment))
+          user_matches = false
+
+        if (rules.new_users_only && user.is_returning)
+          user_matches = false
+
+        return user_matches
+
+  # 7. Assign variant if not already assigned
+  - id: "assign_variant"
+    type: "transform"
+    name: "Assign User to Variant"
+    parameters:
+      expression: |
+        // If already assigned, use existing variant
+        if (check_existing_assignment.variant)
+          return check_existing_assignment.variant
+
+        // If targeting doesn't match, assign control
+        if (!evaluate_targeting.result)
+          return 'control'
+
+        // Calculate variant using consistent hashing
+        hash = md5(user.id + experiment.id)
+        hash_num = parseInt(hash.substring(0, 8), 16)
+        bucket = hash_num % 100
+
+        // Allocate based on traffic split
+        traffic = get_experiment_config.traffic_allocation
+        cumulative = 0
+
+        for (variant in traffic) {
+          cumulative += traffic[variant].percentage
+          if (bucket < cumulative)
+            return variant.name
+        }
+
+        return 'control'
+
+  # 8. Record variant assignment
+  - id: "record_assignment"
+    type: "database_query"
+    name: "Record Variant Assignment"
+    parameters:
+      credentials_name: "experiments_db"
+      query: |
+        INSERT INTO user_variant_assignments
+        (experiment_id, user_id, variant, assigned_at, targeting_matched, status)
+        VALUES (:exp_id, :user_id, :variant, NOW(), :matched, 'active')
+        ON CONFLICT (experiment_id, user_id)
+        DO UPDATE SET last_seen_at = NOW()
+      parameters:
+        exp_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+        variant: "{{assign_variant.result}}"
+        matched: "{{evaluate_targeting.result}}"
+
+  # 9. Route to variant-specific flow
+  - id: "route_variant"
+    type: "switch"
+    name: "Route to Variant Flow"
+    parameters:
+      switch_on: "{{assign_variant.result}}"
+      cases:
+        - value: "control"
+        - value: "variant_a"
+        - value: "variant_b"
+        - value: "variant_c"
+      default: "control"
+
+  # CONTROL VARIANT
+  - id: "serve_control"
+    type: "http_webhook"
+    name: "Serve Control Experience"
+    parameters:
+      url: "{{experiment.control_url}}"
+      method: "send_get"
+      query_params:
+        user_id: "{{user.id}}"
+        experiment_id: "{{experiment.id}}"
+
+  - id: "log_control_served"
+    type: "logging"
+    name: "Log Control Served"
+    parameters:
+      operation: "log_info"
+      message: "Control variant served"
+      context:
+        experiment_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+        variant: "control"
+
+  # VARIANT A
+  - id: "serve_variant_a"
+    type: "http_webhook"
+    name: "Serve Variant A Experience"
+    parameters:
+      url: "{{experiment.variant_a_url}}"
+      method: "send_get"
+      query_params:
+        user_id: "{{user.id}}"
+        experiment_id: "{{experiment.id}}"
+
+  - id: "log_variant_a_served"
+    type: "logging"
+    name: "Log Variant A Served"
+    parameters:
+      operation: "log_info"
+      message: "Variant A served"
+      context:
+        experiment_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+        variant: "variant_a"
+
+  # VARIANT B
+  - id: "serve_variant_b"
+    type: "http_webhook"
+    name: "Serve Variant B Experience"
+    parameters:
+      url: "{{experiment.variant_b_url}}"
+      method: "send_get"
+      query_params:
+        user_id: "{{user.id}}"
+        experiment_id: "{{experiment.id}}"
+
+  - id: "log_variant_b_served"
+    type: "logging"
+    name: "Log Variant B Served"
+    parameters:
+      operation: "log_info"
+      message: "Variant B served"
+      context:
+        experiment_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+        variant: "variant_b"
+
+  # Merge variant responses
+  - id: "merge_variants"
+    type: "merge"
+    name: "Merge Variant Responses"
+    parameters:
+      strategy: "any"
+      combine_mode: "first"
+
+  # 10. Track impression
+  - id: "track_impression"
+    type: "database_query"
+    name: "Track Experiment Impression"
+    parameters:
+      credentials_name: "analytics_db"
+      query: |
+        INSERT INTO experiment_impressions
+        (experiment_id, user_id, variant, timestamp, user_agent,
+         referrer, page_url, session_id)
+        VALUES (:exp_id, :user_id, :variant, NOW(), :ua, :ref, :url, :session)
+      parameters:
+        exp_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+        variant: "{{assign_variant.result}}"
+        ua: "{{user.user_agent}}"
+        ref: "{{user.referrer}}"
+        url: "{{user.page_url}}"
+        session: "{{user.session_id}}"
+
+  # 11. Emit impression metric
+  - id: "emit_impression_metric"
+    type: "metrics"
+    name: "Emit Impression Metric"
+    parameters:
+      operation: "emit_counter"
+      metric_name: "experiment.impressions"
+      value: 1
+      tags:
+        experiment_id: "{{experiment.id}}"
+        experiment_name: "{{get_experiment_config.name}}"
+        variant: "{{assign_variant.result}}"
+
+  # 12. Wait for conversion event (with timeout)
+  - id: "wait_conversion"
+    type: "wait_webhook"
+    name: "Wait for Conversion Event"
+    parameters:
+      timeout_seconds: 3600  # 1 hour session timeout
+      webhook_path: "/webhooks/ab-test/conversion/{{user.id}}/{{experiment.id}}"
+
+  # 13. Record conversion
+  - id: "record_conversion"
+    type: "database_query"
+    name: "Record Conversion Event"
+    parameters:
+      credentials_name: "analytics_db"
+      query: |
+        INSERT INTO experiment_conversions
+        (experiment_id, user_id, variant, conversion_type,
+         conversion_value, timestamp, time_to_convert_seconds)
+        VALUES (:exp_id, :user_id, :variant, :type, :value, NOW(),
+                EXTRACT(EPOCH FROM (NOW() - :impression_time)))
+      parameters:
+        exp_id: "{{experiment.id}}"
+        user_id: "{{user.id}}"
+        variant: "{{assign_variant.result}}"
+        type: "{{wait_conversion.conversion_type}}"
+        value: "{{wait_conversion.conversion_value}}"
+        impression_time: "{{track_impression.timestamp}}"
+
+  # 14. Emit conversion metric
+  - id: "emit_conversion_metric"
+    type: "metrics"
+    name: "Emit Conversion Metric"
+    parameters:
+      operation: "emit_counter"
+      metric_name: "experiment.conversions"
+      value: 1
+      tags:
+        experiment_id: "{{experiment.id}}"
+        variant: "{{assign_variant.result}}"
+        conversion_type: "{{wait_conversion.conversion_type}}"
+
+  # 15. Emit conversion value
+  - id: "emit_conversion_value"
+    type: "metrics"
+    name: "Emit Conversion Value"
+    parameters:
+      operation: "emit_gauge"
+      metric_name: "experiment.conversion_value"
+      value: "{{wait_conversion.conversion_value}}"
+      tags:
+        experiment_id: "{{experiment.id}}"
+        variant: "{{assign_variant.result}}"
+
+  # 16. Calculate and update statistics
+  - id: "update_statistics"
+    type: "database_query"
+    name: "Update Experiment Statistics"
+    parameters:
+      credentials_name: "experiments_db"
+      query: |
+        WITH stats AS (
+          SELECT
+            variant,
+            COUNT(DISTINCT i.user_id) as impressions,
+            COUNT(DISTINCT c.user_id) as conversions,
+            COALESCE(AVG(c.conversion_value), 0) as avg_value,
+            COALESCE(AVG(c.time_to_convert_seconds), 0) as avg_time_to_convert
+          FROM experiment_impressions i
+          LEFT JOIN experiment_conversions c
+            ON i.experiment_id = c.experiment_id
+            AND i.user_id = c.user_id
+            AND i.variant = c.variant
+          WHERE i.experiment_id = :exp_id
+          GROUP BY variant
+        )
+        INSERT INTO experiment_statistics
+        (experiment_id, variant, impressions, conversions,
+         conversion_rate, avg_conversion_value, avg_time_to_convert, updated_at)
+        SELECT
+          :exp_id, variant, impressions, conversions,
+          CASE WHEN impressions > 0 THEN conversions::float / impressions ELSE 0 END,
+          avg_value, avg_time_to_convert, NOW()
+        FROM stats
+        ON CONFLICT (experiment_id, variant) DO UPDATE SET
+          impressions = EXCLUDED.impressions,
+          conversions = EXCLUDED.conversions,
+          conversion_rate = EXCLUDED.conversion_rate,
+          avg_conversion_value = EXCLUDED.avg_conversion_value,
+          avg_time_to_convert = EXCLUDED.avg_time_to_convert,
+          updated_at = NOW()
+      parameters:
+        exp_id: "{{experiment.id}}"
+
+  # 17. Check for statistical significance
+  - id: "check_significance"
+    type: "database_query"
+    name: "Check Statistical Significance"
+    parameters:
+      credentials_name: "experiments_db"
+      query: |
+        SELECT
+          variant,
+          impressions,
+          conversions,
+          conversion_rate,
+          -- Calculate z-score for statistical significance
+          ABS((conversion_rate - control.conversion_rate) /
+              SQRT((control.conversion_rate * (1 - control.conversion_rate) / control.impressions) +
+                   (conversion_rate * (1 - conversion_rate) / impressions))) as z_score,
+          CASE WHEN ABS((conversion_rate - control.conversion_rate) /
+                SQRT((control.conversion_rate * (1 - control.conversion_rate) / control.impressions) +
+                     (conversion_rate * (1 - conversion_rate) / impressions))) > 1.96
+               THEN true ELSE false END as is_significant
+        FROM experiment_statistics
+        CROSS JOIN (SELECT conversion_rate, impressions FROM experiment_statistics
+                    WHERE experiment_id = :exp_id AND variant = 'control') control
+        WHERE experiment_id = :exp_id
+          AND variant != 'control'
+          AND impressions >= 100  -- Minimum sample size
+      parameters:
+        exp_id: "{{experiment.id}}"
+
+  # 18. Check if experiment should end
+  - id: "check_early_stop"
+    type: "transform"
+    name: "Check Early Stop Criteria"
+    parameters:
+      expression: |
+        // Check if any variant has conclusive results
+        significant_variants = check_significance.rows.filter(v => v.is_significant)
+
+        // Stop if significant winner with >95% confidence and >1000 impressions
+        if (significant_variants.length > 0) {
+          winner = significant_variants[0]
+          if (winner.impressions > 1000 && winner.z_score > 2.58) {
+            return {should_stop: true, reason: 'conclusive_winner', winner: winner.variant}
+          }
+        }
+
+        // Check max duration
+        days_running = (now - get_experiment_config.start_date) / 86400000
+        if (days_running >= get_experiment_config.max_duration_days) {
+          return {should_stop: true, reason: 'max_duration'}
+        }
+
+        return {should_stop: false}
+
+  # 19. If should stop, notify stakeholders
+  - id: "notify_experiment_end"
+    type: "slack"
+    name: "Notify Experiment Completion"
+    parameters:
+      operation: "send_message"
+      credentials_name: "slack_workspace"
+      channel: "#growth-experiments"
+      message: |
+        🧪 Experiment Completed: {{get_experiment_config.name}}
+
+        Reason: {{check_early_stop.reason}}
+        {{#if check_early_stop.winner}}
+        🏆 Winner: {{check_early_stop.winner}}
+        {{/if}}
+
+        Results:
+        {{#each update_statistics.rows}}
+        - {{variant}}: {{conversions}}/{{impressions}} ({{conversion_rate}}%)
+        {{/each}}
+
+        Dashboard: https://experiments.example.com/{{experiment.id}}
+
+  # 20. End trace
+  - id: "end_trace"
+    type: "tracing"
+    name: "End Experiment Trace"
+    parameters:
+      operation: "end_span"
+      span_id: "{{start_trace.span_id}}"
+      attributes:
+        variant_assigned: "{{assign_variant.result}}"
+        conversion_occurred: "{{!!wait_conversion.conversion_type}}"
+        experiment_status: "{{get_experiment_config.status}}"
+
+  # 21. Audit trail
+  - id: "audit_experiment"
+    type: "audit_trail"
+    name: "Audit Experiment Activity"
+    parameters:
+      operation: "log_action"
+      action_type: "ab_test_impression"
+      resource_id: "{{experiment.id}}"
+      user_id: "{{user.id}}"
+      details:
+        variant: "{{assign_variant.result}}"
+        converted: "{{!!wait_conversion.conversion_type}}"
+        conversion_value: "{{wait_conversion.conversion_value}}"
+
+connections:
+  - from: "receive_visit"
+    to: "start_trace"
+  - from: "start_trace"
+    to: "check_existing_assignment"
+  - from: "check_existing_assignment"
+    to: "get_experiment_config"
+  - from: "get_experiment_config"
+    to: "validate_experiment"
+  - from: "validate_experiment"
+    to: "evaluate_targeting"
+  - from: "evaluate_targeting"
+    to: "assign_variant"
+  - from: "assign_variant"
+    to: "record_assignment"
+  - from: "record_assignment"
+    to: "route_variant"
+
+  # Variant routing
+  - from: "route_variant"
+    to: "serve_control"
+    condition: "control"
+  - from: "serve_control"
+    to: "log_control_served"
+  - from: "log_control_served"
+    to: "merge_variants"
+
+  - from: "route_variant"
+    to: "serve_variant_a"
+    condition: "variant_a"
+  - from: "serve_variant_a"
+    to: "log_variant_a_served"
+  - from: "log_variant_a_served"
+    to: "merge_variants"
+
+  - from: "route_variant"
+    to: "serve_variant_b"
+    condition: "variant_b"
+  - from: "serve_variant_b"
+    to: "log_variant_b_served"
+  - from: "log_variant_b_served"
+    to: "merge_variants"
+
+  # Tracking and metrics
+  - from: "merge_variants"
+    to: "track_impression"
+  - from: "track_impression"
+    to: "emit_impression_metric"
+  - from: "emit_impression_metric"
+    to: "wait_conversion"
+  - from: "wait_conversion"
+    to: "record_conversion"
+  - from: "record_conversion"
+    to: "emit_conversion_metric"
+  - from: "emit_conversion_metric"
+    to: "emit_conversion_value"
+  - from: "emit_conversion_value"
+    to: "update_statistics"
+  - from: "update_statistics"
+    to: "check_significance"
+  - from: "check_significance"
+    to: "check_early_stop"
+  - from: "check_early_stop"
+    to: "notify_experiment_end"
+  - from: "notify_experiment_end"
+    to: "end_trace"
+  - from: "end_trace"
+    to: "audit_experiment"

@@ -1,0 +1,359 @@
+name: "Lead Nurturing Campaign"
+description: "Automated lead nurturing with CRM integration, email sequences, and behavior tracking"
+version: "1.0.0"
+
+# Trigger: New lead captured
+trigger:
+  type: "webhook_trigger"
+  config:
+    path: "/webhooks/leads/new"
+    method: "POST"
+
+nodes:
+  # 1. Receive new lead
+  - id: "receive_lead"
+    type: "manual_trigger"
+    name: "Receive New Lead"
+    parameters:
+      description: "New lead from website form or landing page"
+
+  # 2. Enrich lead data
+  - id: "enrich_lead"
+    type: "http_webhook"
+    name: "Enrich Lead Data"
+    parameters:
+      url: "https://api.clearbit.com/v2/people/find"
+      method: "send_get"
+      query_params:
+        email: "{{lead.email}}"
+      headers:
+        Authorization: "Bearer {{env.CLEARBIT_API_KEY}}"
+      timeout_seconds: 10
+
+  # 3. Score the lead
+  - id: "score_lead"
+    type: "transform"
+    name: "Calculate Lead Score"
+    parameters:
+      expression: |
+        base_score = 0
+        if (company_size > 100) base_score += 20
+        if (job_title contains 'Director' or job_title contains 'VP') base_score += 30
+        if (industry in ['Technology', 'SaaS', 'Software']) base_score += 25
+        if (budget > 10000) base_score += 25
+        return base_score
+
+  # 4. Create or update contact in CRM
+  - id: "upsert_crm_contact"
+    type: "database_query"
+    name: "Upsert CRM Contact"
+    parameters:
+      credentials_name: "crm_db"
+      query: |
+        INSERT INTO contacts (email, first_name, last_name, company, job_title, lead_score, source, created_at)
+        VALUES (:email, :first_name, :last_name, :company, :job_title, :score, :source, NOW())
+        ON CONFLICT (email) DO UPDATE SET
+          lead_score = :score,
+          company = :company,
+          job_title = :job_title,
+          updated_at = NOW()
+        RETURNING id
+      parameters:
+        email: "{{lead.email}}"
+        first_name: "{{lead.first_name}}"
+        last_name: "{{lead.last_name}}"
+        company: "{{enrich_lead.company.name}}"
+        job_title: "{{enrich_lead.employment.title}}"
+        score: "{{score_lead.result}}"
+        source: "{{lead.source}}"
+
+  # 5. Route based on lead score
+  - id: "route_by_score"
+    type: "switch"
+    name: "Route by Lead Score"
+    parameters:
+      switch_on: "{{score_lead.result}}"
+      cases:
+        - value: "hot"
+          condition:
+            type: "greater_than_or_equal"
+            threshold: 70
+        - value: "warm"
+          condition:
+            type: "greater_than_or_equal"
+            threshold: 40
+        - value: "cold"
+          condition:
+            type: "less_than"
+            threshold: 40
+      default: "warm"
+
+  # 6a. Hot lead: Alert sales team immediately
+  - id: "alert_sales_hot"
+    type: "slack"
+    name: "Alert Sales Team - Hot Lead"
+    parameters:
+      operation: "send_message"
+      credentials_name: "slack_workspace"
+      channel: "#sales-hot-leads"
+      message: |
+        🔥 HOT LEAD ALERT!
+
+        Name: {{lead.first_name}} {{lead.last_name}}
+        Company: {{enrich_lead.company.name}}
+        Title: {{enrich_lead.employment.title}}
+        Lead Score: {{score_lead.result}}
+        Email: {{lead.email}}
+
+        CRM Link: https://crm.example.com/contacts/{{upsert_crm_contact.id}}
+
+  # 6b. Create task for sales rep
+  - id: "create_sales_task"
+    type: "http_webhook"
+    name: "Create Sales Task"
+    parameters:
+      url: "https://api.salesforce.com/v1/tasks"
+      method: "send_post"
+      headers:
+        Authorization: "Bearer {{env.SALESFORCE_TOKEN}}"
+      body:
+        subject: "Follow up with {{lead.first_name}} {{lead.last_name}}"
+        priority: "High"
+        due_date: "{{now + 2 hours}}"
+        contact_id: "{{upsert_crm_contact.id}}"
+        description: "Hot lead from {{lead.source}}. Score: {{score_lead.result}}"
+
+  # 7. Warm lead: Start nurture sequence
+  - id: "start_nurture_sequence"
+    type: "set_variable"
+    name: "Initialize Nurture Sequence"
+    parameters:
+      sequence_day: 0
+      emails_sent: 0
+      last_engagement: null
+
+  # 8. Email sequence loop (7 emails over 30 days)
+  - id: "nurture_loop"
+    type: "loop"
+    name: "Nurture Email Sequence"
+    parameters:
+      items: "[0, 3, 7, 14, 21, 28, 35]"
+      item_variable: "day"
+      index_variable: "email_num"
+      max_iterations: 7
+
+  # 9. Wait for scheduled day
+  - id: "wait_for_day"
+    type: "delay"
+    name: "Wait Until Scheduled Day"
+    parameters:
+      duration_seconds: "{{day * 86400}}"
+
+  # 10. Check if lead has engaged
+  - id: "check_engagement"
+    type: "database_query"
+    name: "Check Lead Engagement"
+    parameters:
+      credentials_name: "analytics_db"
+      query: "SELECT COUNT(*) as engagement_count FROM lead_activities WHERE contact_id = :id AND created_at > NOW() - INTERVAL '{{day}} days'"
+      parameters:
+        id: "{{upsert_crm_contact.id}}"
+
+  # 11. Skip email if already engaged
+  - id: "skip_if_engaged"
+    type: "conditional"
+    name: "Skip If Already Engaged"
+    parameters:
+      condition: "{{check_engagement.engagement_count}} > 0"
+      true_path: "skip_email"
+      false_path: "send_nurture_email"
+
+  # 12. Send nurture email
+  - id: "send_nurture_email"
+    type: "sendgrid"
+    name: "Send Nurture Email"
+    parameters:
+      operation: "send_template_email"
+      credentials_name: "sendgrid_production"
+      to: "{{lead.email}}"
+      from: "nurture@example.com"
+      template_id: "nurture_day_{{email_num}}"
+      template_data:
+        first_name: "{{lead.first_name}}"
+        company: "{{enrich_lead.company.name}}"
+        day_number: "{{email_num}}"
+        unsubscribe_link: "https://example.com/unsubscribe/{{lead.email}}"
+
+  # 13. Track email sent
+  - id: "track_email_sent"
+    type: "database_query"
+    name: "Track Email Sent"
+    parameters:
+      credentials_name: "analytics_db"
+      query: "INSERT INTO lead_activities (contact_id, activity_type, email_template, created_at) VALUES (:id, 'email_sent', :template, NOW())"
+      parameters:
+        id: "{{upsert_crm_contact.id}}"
+        template: "nurture_day_{{email_num}}"
+
+  # 14. Wait for email open/click tracking (webhook)
+  - id: "wait_for_engagement"
+    type: "wait_webhook"
+    name: "Wait for Email Engagement"
+    parameters:
+      timeout_seconds: 259200
+      webhook_path: "/webhooks/email-engagement/{{lead.email}}"
+
+  # 15. Process engagement event
+  - id: "process_engagement"
+    type: "database_query"
+    name: "Record Engagement"
+    parameters:
+      credentials_name: "analytics_db"
+      query: "INSERT INTO lead_activities (contact_id, activity_type, event_data, created_at) VALUES (:id, :type, :data, NOW())"
+      parameters:
+        id: "{{upsert_crm_contact.id}}"
+        type: "{{wait_for_engagement.event_type}}"
+        data: "{{wait_for_engagement.event_data}}"
+
+  # 16. Increase lead score on engagement
+  - id: "increase_score"
+    type: "database_query"
+    name: "Increase Lead Score"
+    parameters:
+      credentials_name: "crm_db"
+      query: "UPDATE contacts SET lead_score = lead_score + :points, updated_at = NOW() WHERE id = :id RETURNING lead_score"
+      parameters:
+        id: "{{upsert_crm_contact.id}}"
+        points: 10
+
+  # 17. Check if now qualified
+  - id: "check_if_qualified"
+    type: "assertion"
+    name: "Check If Lead Qualified"
+    parameters:
+      operation: "assert_greater_than"
+      actual_value: "{{increase_score.lead_score}}"
+      expected_value: 70
+      continue_on_failure: true
+
+  # 18. Notify sales if qualified
+  - id: "notify_sales_qualified"
+    type: "slack"
+    name: "Notify Sales - Lead Qualified"
+    parameters:
+      operation: "send_message"
+      credentials_name: "slack_workspace"
+      channel: "#sales"
+      message: "💎 Lead {{lead.first_name}} {{lead.last_name}} from {{enrich_lead.company.name}} is now qualified! Score: {{increase_score.lead_score}}"
+
+  # 19. Cold lead: Add to newsletter
+  - id: "add_to_newsletter"
+    type: "sendgrid"
+    name: "Add to Newsletter List"
+    parameters:
+      operation: "add_recipient"
+      credentials_name: "sendgrid_production"
+      list_id: "newsletter_subscribers"
+      email: "{{lead.email}}"
+      first_name: "{{lead.first_name}}"
+      last_name: "{{lead.last_name}}"
+
+  # 20. Send welcome email
+  - id: "send_welcome"
+    type: "sendgrid"
+    name: "Send Welcome Email"
+    parameters:
+      operation: "send_template_email"
+      credentials_name: "sendgrid_production"
+      to: "{{lead.email}}"
+      from: "hello@example.com"
+      template_id: "welcome_newsletter"
+      template_data:
+        first_name: "{{lead.first_name}}"
+
+  # 21. Record in audit trail
+  - id: "audit_campaign"
+    type: "audit_trail"
+    name: "Audit Campaign Activity"
+    parameters:
+      operation: "log_action"
+      action_type: "lead_nurture_campaign"
+      resource_id: "{{upsert_crm_contact.id}}"
+      details:
+        lead_score: "{{score_lead.result}}"
+        route: "{{route_by_score.value}}"
+        emails_sent: "{{nurture_loop.iterations}}"
+
+  # 22. Emit metrics
+  - id: "emit_metrics"
+    type: "metrics"
+    name: "Emit Campaign Metrics"
+    parameters:
+      operation: "emit_counter"
+      metric_name: "leads.processed"
+      value: 1
+      tags:
+        score_category: "{{route_by_score.value}}"
+        source: "{{lead.source}}"
+
+connections:
+  - from: "receive_lead"
+    to: "enrich_lead"
+  - from: "enrich_lead"
+    to: "score_lead"
+  - from: "score_lead"
+    to: "upsert_crm_contact"
+  - from: "upsert_crm_contact"
+    to: "route_by_score"
+
+  # Hot lead path
+  - from: "route_by_score"
+    to: "alert_sales_hot"
+    condition: "hot"
+  - from: "alert_sales_hot"
+    to: "create_sales_task"
+  - from: "create_sales_task"
+    to: "audit_campaign"
+
+  # Warm lead path - nurture sequence
+  - from: "route_by_score"
+    to: "start_nurture_sequence"
+    condition: "warm"
+  - from: "start_nurture_sequence"
+    to: "nurture_loop"
+  - from: "nurture_loop"
+    to: "wait_for_day"
+  - from: "wait_for_day"
+    to: "check_engagement"
+  - from: "check_engagement"
+    to: "skip_if_engaged"
+  - from: "skip_if_engaged"
+    to: "send_nurture_email"
+    condition: "false"
+  - from: "send_nurture_email"
+    to: "track_email_sent"
+  - from: "track_email_sent"
+    to: "wait_for_engagement"
+  - from: "wait_for_engagement"
+    to: "process_engagement"
+  - from: "process_engagement"
+    to: "increase_score"
+  - from: "increase_score"
+    to: "check_if_qualified"
+  - from: "check_if_qualified"
+    to: "notify_sales_qualified"
+  - from: "notify_sales_qualified"
+    to: "audit_campaign"
+
+  # Cold lead path
+  - from: "route_by_score"
+    to: "add_to_newsletter"
+    condition: "cold"
+  - from: "add_to_newsletter"
+    to: "send_welcome"
+  - from: "send_welcome"
+    to: "audit_campaign"
+
+  # Final metrics
+  - from: "audit_campaign"
+    to: "emit_metrics"

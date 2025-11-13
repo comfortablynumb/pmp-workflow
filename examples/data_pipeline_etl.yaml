@@ -1,0 +1,536 @@
+name: "Data Pipeline ETL"
+description: "Extract, Transform, Load data pipeline with validation, transformations, and quality checks"
+version: "1.0.0"
+
+# Trigger: Scheduled daily at 2 AM
+trigger:
+  type: "schedule_trigger"
+  config:
+    cron: "0 2 * * *"
+    timezone: "UTC"
+
+nodes:
+  # 1. Start pipeline
+  - id: "start_pipeline"
+    type: "manual_trigger"
+    name: "Start ETL Pipeline"
+    parameters:
+      description: "Daily data pipeline execution"
+
+  # 2. Log pipeline start
+  - id: "log_start"
+    type: "logging"
+    name: "Log Pipeline Start"
+    parameters:
+      operation: "log_info"
+      message: "Starting ETL pipeline"
+      context:
+        pipeline_date: "{{today}}"
+        execution_id: "{{execution.id}}"
+
+  # 3. Create trace for pipeline
+  - id: "start_trace"
+    type: "tracing"
+    name: "Start Pipeline Trace"
+    parameters:
+      operation: "create_trace"
+      span_name: "etl_pipeline_daily"
+      attributes:
+        pipeline.date: "{{today}}"
+        pipeline.type: "daily_etl"
+
+  # EXTRACT PHASE
+  # 4. Extract from multiple sources in parallel
+  - id: "parallel_extract"
+    type: "split"
+    name: "Parallel Data Extraction"
+    parameters:
+      branches: 4
+      wait_for_all: true
+
+  # 4a. Extract from PostgreSQL
+  - id: "extract_postgres"
+    type: "database_query"
+    name: "Extract from PostgreSQL"
+    parameters:
+      credentials_name: "postgres_source"
+      query: |
+        SELECT
+          id, user_id, order_date, total_amount, status, created_at
+        FROM orders
+        WHERE order_date >= CURRENT_DATE - INTERVAL '1 day'
+          AND order_date < CURRENT_DATE
+      fetch_all: true
+
+  # 4b. Extract from MySQL
+  - id: "extract_mysql"
+    type: "mysql"
+    name: "Extract from MySQL"
+    parameters:
+      credentials_name: "mysql_source"
+      operation: "execute_query"
+      query: |
+        SELECT
+          customer_id, email, name, created_date, segment
+        FROM customers
+        WHERE updated_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+
+  # 4c. Extract from MongoDB
+  - id: "extract_mongodb"
+    type: "mongodb"
+    name: "Extract from MongoDB"
+    parameters:
+      credentials_name: "mongodb_source"
+      operation: "find"
+      database: "analytics"
+      collection: "events"
+      filter:
+        timestamp:
+          $gte: "{{yesterday}}"
+          $lt: "{{today}}"
+      projection:
+        event_type: 1
+        user_id: 1
+        properties: 1
+        timestamp: 1
+
+  # 4d. Extract from S3 CSV files
+  - id: "extract_s3"
+    type: "s3"
+    name: "Extract from S3"
+    parameters:
+      credentials_name: "aws_s3"
+      operation: "download"
+      bucket: "data-lake"
+      key: "raw-data/products-{{yesterday}}.csv"
+      local_path: "/tmp/products.csv"
+
+  # 5. Merge extracted data
+  - id: "merge_extracted"
+    type: "merge"
+    name: "Merge Extracted Data"
+    parameters:
+      strategy: "all"
+      combine_mode: "object"
+
+  # 6. Parse CSV file
+  - id: "parse_csv"
+    type: "csv_excel"
+    name: "Parse Products CSV"
+    parameters:
+      operation: "parse_csv"
+      file_path: "/tmp/products.csv"
+      has_headers: true
+      delimiter: ","
+
+  # TRANSFORM PHASE
+  # 7. Data quality checks
+  - id: "validate_data_quality"
+    type: "assertion"
+    name: "Validate Data Quality"
+    parameters:
+      operation: "assert_greater_than"
+      actual_value: "{{extract_postgres.rows.length}}"
+      expected_value: 0
+      error_message: "No orders found for processing"
+
+  # 8. Filter valid orders only
+  - id: "filter_valid_orders"
+    type: "filter"
+    name: "Filter Valid Orders"
+    parameters:
+      array_path: "{{extract_postgres.rows}}"
+      condition:
+        field: "status"
+        operator: "not_equals"
+        value: "cancelled"
+
+  # 9. Enrich orders with customer data
+  - id: "enrich_orders"
+    type: "loop"
+    name: "Enrich Each Order"
+    parameters:
+      items: "{{filter_valid_orders.result}}"
+      item_variable: "order"
+      index_variable: "idx"
+      max_iterations: 10000
+
+  # 10. Lookup customer
+  - id: "lookup_customer"
+    type: "filter"
+    name: "Find Customer"
+    parameters:
+      array_path: "{{extract_mysql.rows}}"
+      condition:
+        field: "customer_id"
+        operator: "equals"
+        value: "{{order.user_id}}"
+
+  # 11. Merge order with customer
+  - id: "merge_order_customer"
+    type: "map"
+    name: "Merge Order and Customer"
+    parameters:
+      array_path: "[{{order}}]"
+      mapping:
+        order_id: "{{id}}"
+        order_date: "{{order_date}}"
+        total_amount: "{{total_amount}}"
+        customer_id: "{{user_id}}"
+        customer_email: "{{lookup_customer[0].email}}"
+        customer_name: "{{lookup_customer[0].name}}"
+        customer_segment: "{{lookup_customer[0].segment}}"
+
+  # 12. Calculate aggregations
+  - id: "calc_order_stats"
+    type: "reduce"
+    name: "Calculate Order Statistics"
+    parameters:
+      array_path: "{{merge_order_customer.result}}"
+      operation: "sum"
+      field: "total_amount"
+
+  # 13. Group by customer segment
+  - id: "group_by_segment"
+    type: "group_by"
+    name: "Group by Customer Segment"
+    parameters:
+      array_path: "{{merge_order_customer.result}}"
+      group_by: "customer_segment"
+
+  # 14. Sort orders by amount
+  - id: "sort_orders"
+    type: "sort"
+    name: "Sort Orders by Amount"
+    parameters:
+      array_path: "{{merge_order_customer.result}}"
+      sort_by: "total_amount"
+      order: "desc"
+
+  # 15. Flatten event data
+  - id: "flatten_events"
+    type: "flatten"
+    name: "Flatten MongoDB Events"
+    parameters:
+      array_path: "{{extract_mongodb.documents}}"
+      depth: 2
+
+  # 16. Transform to analytics schema
+  - id: "transform_schema"
+    type: "map"
+    name: "Transform to Analytics Schema"
+    parameters:
+      array_path: "{{sort_orders.result}}"
+      mapping:
+        fact_order_id: "{{order_id}}"
+        fact_date: "{{order_date}}"
+        fact_amount: "{{total_amount}}"
+        dim_customer_id: "{{customer_id}}"
+        dim_customer_email: "{{customer_email}}"
+        dim_customer_name: "{{customer_name}}"
+        dim_segment: "{{customer_segment}}"
+        etl_timestamp: "{{now}}"
+        etl_batch_id: "{{execution.id}}"
+
+  # LOAD PHASE
+  # 17. Create staging table
+  - id: "create_staging"
+    type: "database_query"
+    name: "Create Staging Table"
+    parameters:
+      credentials_name: "warehouse_db"
+      query: |
+        CREATE TABLE IF NOT EXISTS staging_orders_{{execution.id}} (
+          fact_order_id VARCHAR(255),
+          fact_date DATE,
+          fact_amount DECIMAL(10,2),
+          dim_customer_id VARCHAR(255),
+          dim_customer_email VARCHAR(255),
+          dim_customer_name VARCHAR(255),
+          dim_segment VARCHAR(50),
+          etl_timestamp TIMESTAMP,
+          etl_batch_id VARCHAR(255)
+        )
+
+  # 18. Load to staging table
+  - id: "load_staging"
+    type: "database_query"
+    name: "Load to Staging"
+    parameters:
+      credentials_name: "warehouse_db"
+      query: |
+        INSERT INTO staging_orders_{{execution.id}}
+        (fact_order_id, fact_date, fact_amount, dim_customer_id, dim_customer_email,
+         dim_customer_name, dim_segment, etl_timestamp, etl_batch_id)
+        VALUES {{transform_schema.result | to_sql_values}}
+      batch_size: 1000
+
+  # 19. Data validation in staging
+  - id: "validate_staging"
+    type: "database_query"
+    name: "Validate Staging Data"
+    parameters:
+      credentials_name: "warehouse_db"
+      query: |
+        SELECT
+          COUNT(*) as total_rows,
+          COUNT(DISTINCT fact_order_id) as unique_orders,
+          SUM(fact_amount) as total_amount,
+          MIN(fact_date) as min_date,
+          MAX(fact_date) as max_date
+        FROM staging_orders_{{execution.id}}
+
+  # 20. Assert data quality
+  - id: "assert_quality"
+    type: "assertion"
+    name: "Assert Data Quality"
+    parameters:
+      operation: "assert_equals"
+      actual_value: "{{validate_staging.total_rows}}"
+      expected_value: "{{transform_schema.result.length}}"
+      error_message: "Row count mismatch in staging"
+
+  # 21. Merge to production table (upsert)
+  - id: "merge_production"
+    type: "database_query"
+    name: "Merge to Production"
+    parameters:
+      credentials_name: "warehouse_db"
+      query: |
+        MERGE INTO fact_orders AS target
+        USING staging_orders_{{execution.id}} AS source
+        ON target.fact_order_id = source.fact_order_id
+        WHEN MATCHED THEN
+          UPDATE SET
+            fact_amount = source.fact_amount,
+            dim_segment = source.dim_segment,
+            etl_timestamp = source.etl_timestamp
+        WHEN NOT MATCHED THEN
+          INSERT (fact_order_id, fact_date, fact_amount, dim_customer_id,
+                  dim_customer_email, dim_customer_name, dim_segment,
+                  etl_timestamp, etl_batch_id)
+          VALUES (source.fact_order_id, source.fact_date, source.fact_amount,
+                  source.dim_customer_id, source.dim_customer_email,
+                  source.dim_customer_name, source.dim_segment,
+                  source.etl_timestamp, source.etl_batch_id)
+
+  # 22. Update aggregated tables
+  - id: "update_aggregates"
+    type: "database_query"
+    name: "Update Aggregate Tables"
+    parameters:
+      credentials_name: "warehouse_db"
+      query: |
+        INSERT INTO daily_segment_metrics (date, segment, order_count, total_revenue)
+        SELECT
+          fact_date,
+          dim_segment,
+          COUNT(*) as order_count,
+          SUM(fact_amount) as total_revenue
+        FROM staging_orders_{{execution.id}}
+        GROUP BY fact_date, dim_segment
+        ON CONFLICT (date, segment) DO UPDATE SET
+          order_count = EXCLUDED.order_count,
+          total_revenue = EXCLUDED.total_revenue
+
+  # 23. Archive to S3
+  - id: "archive_to_s3"
+    type: "s3"
+    name: "Archive Processed Data"
+    parameters:
+      credentials_name: "aws_s3"
+      operation: "upload"
+      bucket: "data-warehouse-archive"
+      key: "processed/orders-{{today}}.json"
+      body: "{{transform_schema.result | json}}"
+
+  # 24. Generate data quality report
+  - id: "generate_report"
+    type: "pdf_generator"
+    name: "Generate Quality Report"
+    parameters:
+      operation: "generate_from_html"
+      output_path: "/tmp/etl_report_{{today}}.pdf"
+      content: |
+        <h1>ETL Pipeline Quality Report</h1>
+        <p>Date: {{today}}</p>
+        <h2>Summary</h2>
+        <ul>
+          <li>Orders Processed: {{validate_staging.total_rows}}</li>
+          <li>Total Revenue: ${{validate_staging.total_amount}}</li>
+          <li>Date Range: {{validate_staging.min_date}} to {{validate_staging.max_date}}</li>
+        </ul>
+
+  # 25. Send success notification
+  - id: "notify_success"
+    type: "slack"
+    name: "Send Success Notification"
+    parameters:
+      operation: "send_message"
+      credentials_name: "slack_workspace"
+      channel: "#data-engineering"
+      message: |
+        ✅ ETL Pipeline Completed Successfully
+
+        📊 Statistics:
+        - Orders: {{validate_staging.total_rows}}
+        - Revenue: ${{validate_staging.total_amount}}
+        - Execution Time: {{execution.duration_ms}}ms
+
+        📈 Report: {{generate_report.url}}
+
+  # 26. Record metrics
+  - id: "record_metrics"
+    type: "performance_dashboard"
+    name: "Record Pipeline Metrics"
+    parameters:
+      operation: "record_execution_time"
+      workflow_id: "data_pipeline_etl"
+      execution_time_ms: "{{execution.duration_ms}}"
+      success_count: 1
+
+  # 27. Emit custom metrics
+  - id: "emit_metrics"
+    type: "metrics"
+    name: "Emit Pipeline Metrics"
+    parameters:
+      operation: "emit_gauge"
+      metric_name: "etl.orders.processed"
+      value: "{{validate_staging.total_rows}}"
+      tags:
+        pipeline: "daily_etl"
+        date: "{{today}}"
+
+  # 28. End trace
+  - id: "end_trace"
+    type: "tracing"
+    name: "End Pipeline Trace"
+    parameters:
+      operation: "end_span"
+      span_id: "{{start_trace.span_id}}"
+      attributes:
+        orders_processed: "{{validate_staging.total_rows}}"
+        pipeline_status: "success"
+
+  # 29. Audit trail
+  - id: "audit_pipeline"
+    type: "audit_trail"
+    name: "Audit Pipeline Execution"
+    parameters:
+      operation: "log_action"
+      action_type: "etl_pipeline_execution"
+      resource_id: "data_pipeline_etl"
+      details:
+        execution_id: "{{execution.id}}"
+        orders_processed: "{{validate_staging.total_rows}}"
+        duration_ms: "{{execution.duration_ms}}"
+
+  # 30. Cleanup staging table
+  - id: "cleanup_staging"
+    type: "database_query"
+    name: "Cleanup Staging Table"
+    parameters:
+      credentials_name: "warehouse_db"
+      query: "DROP TABLE IF EXISTS staging_orders_{{execution.id}}"
+
+# Error handling
+error_handlers:
+  - node: "extract_postgres"
+    on_error: "retry"
+    max_retries: 3
+    retry_delay_ms: 5000
+
+  - node: "assert_quality"
+    on_error: "alert_and_stop"
+    alert:
+      type: "pagerduty"
+      severity: "high"
+      message: "Data quality check failed in ETL pipeline"
+
+connections:
+  - from: "start_pipeline"
+    to: "log_start"
+  - from: "log_start"
+    to: "start_trace"
+  - from: "start_trace"
+    to: "parallel_extract"
+
+  # Extract branches
+  - from: "parallel_extract"
+    to: "extract_postgres"
+    branch: 1
+  - from: "parallel_extract"
+    to: "extract_mysql"
+    branch: 2
+  - from: "parallel_extract"
+    to: "extract_mongodb"
+    branch: 3
+  - from: "parallel_extract"
+    to: "extract_s3"
+    branch: 4
+
+  # Merge extraction
+  - from: "extract_postgres"
+    to: "merge_extracted"
+  - from: "extract_mysql"
+    to: "merge_extracted"
+  - from: "extract_mongodb"
+    to: "merge_extracted"
+  - from: "extract_s3"
+    to: "merge_extracted"
+
+  # Transform phase
+  - from: "merge_extracted"
+    to: "parse_csv"
+  - from: "parse_csv"
+    to: "validate_data_quality"
+  - from: "validate_data_quality"
+    to: "filter_valid_orders"
+  - from: "filter_valid_orders"
+    to: "enrich_orders"
+  - from: "enrich_orders"
+    to: "lookup_customer"
+  - from: "lookup_customer"
+    to: "merge_order_customer"
+  - from: "merge_order_customer"
+    to: "calc_order_stats"
+  - from: "calc_order_stats"
+    to: "group_by_segment"
+  - from: "group_by_segment"
+    to: "sort_orders"
+  - from: "sort_orders"
+    to: "flatten_events"
+  - from: "flatten_events"
+    to: "transform_schema"
+
+  # Load phase
+  - from: "transform_schema"
+    to: "create_staging"
+  - from: "create_staging"
+    to: "load_staging"
+  - from: "load_staging"
+    to: "validate_staging"
+  - from: "validate_staging"
+    to: "assert_quality"
+  - from: "assert_quality"
+    to: "merge_production"
+  - from: "merge_production"
+    to: "update_aggregates"
+  - from: "update_aggregates"
+    to: "archive_to_s3"
+
+  # Reporting and cleanup
+  - from: "archive_to_s3"
+    to: "generate_report"
+  - from: "generate_report"
+    to: "notify_success"
+  - from: "notify_success"
+    to: "record_metrics"
+  - from: "record_metrics"
+    to: "emit_metrics"
+  - from: "emit_metrics"
+    to: "end_trace"
+  - from: "end_trace"
+    to: "audit_pipeline"
+  - from: "audit_pipeline"
+    to: "cleanup_staging"
