@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -25,6 +25,10 @@ impl NodeType for WebhookTriggerNode {
 
     fn category(&self) -> NodeCategory {
         NodeCategory::Trigger
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::Webhook
     }
 
     fn parameter_schema(&self) -> serde_json::Value {

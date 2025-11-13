@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -20,6 +20,10 @@ impl NodeType for ManualTriggerNode {
 
     fn category(&self) -> NodeCategory {
         NodeCategory::Trigger
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::Manual
     }
 
     fn parameter_schema(&self) -> serde_json::Value {

@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory, NodeType};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -20,6 +20,10 @@ impl NodeType for TransformNode {
 
     fn category(&self) -> NodeCategory {
         NodeCategory::Action
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::Transform
     }
 
     fn parameter_schema(&self) -> serde_json::Value {
@@ -89,13 +93,13 @@ fn extract_field(data: &serde_json::Value, path: &str) -> anyhow::Result<serde_j
         }
 
         // Handle array indexing
-        if let Some(idx_str) = part.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-            if let Ok(idx) = idx_str.parse::<usize>() {
-                current = current
-                    .get(idx)
-                    .ok_or_else(|| anyhow::anyhow!("Array index out of bounds: {}", idx))?;
-                continue;
-            }
+        if let Some(idx_str) = part.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
+            && let Ok(idx) = idx_str.parse::<usize>()
+        {
+            current = current
+                .get(idx)
+                .ok_or_else(|| anyhow::anyhow!("Array index out of bounds: {}", idx))?;
+            continue;
         }
 
         // Regular field access
@@ -120,10 +124,10 @@ fn substitute_template(
                 let path = s[2..s.len() - 2].trim();
 
                 // Check if it's a variable reference
-                if let Some(var_name) = path.strip_prefix("$") {
-                    if let Some(value) = context.get_variable(var_name) {
-                        return Ok(value.clone());
-                    }
+                if let Some(var_name) = path.strip_prefix("$")
+                    && let Some(value) = context.get_variable(var_name)
+                {
+                    return Ok(value.clone());
                 }
 
                 // Otherwise, extract from input

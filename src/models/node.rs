@@ -89,6 +89,37 @@ pub enum NodeCategory {
     Action,
 }
 
+/// Node subcategory - provides additional classification within a category
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeSubcategory {
+    /// Webhook-based triggers
+    Webhook,
+    /// Schedule/cron-based triggers
+    Schedule,
+    /// Manual/on-demand triggers
+    Manual,
+    /// HTTP/API related actions
+    Http,
+    /// Data transformation actions
+    Transform,
+    /// Logic/conditional actions
+    Logic,
+    /// Database operations
+    Database,
+    /// Storage operations (S3, file systems, etc.)
+    Storage,
+    /// AI/LLM operations (OpenAI, Gemini, Bedrock, etc.)
+    AI,
+    /// Communication operations (Slack, Gmail, Email, etc.)
+    Communication,
+    /// Workflow execution actions
+    Workflow,
+    /// Variable management actions
+    Variable,
+    /// General/uncategorized
+    General,
+}
+
 /// Trait defining a node type with metadata
 pub trait NodeType {
     /// Get the node type identifier (e.g., "http_request", "transform")
@@ -96,6 +127,11 @@ pub trait NodeType {
 
     /// Get the category of this node (Trigger or Action)
     fn category(&self) -> NodeCategory;
+
+    /// Get the subcategory of this node
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::General
+    }
 
     /// Get the JSON schema for the node's parameters
     /// Returns a JSON Schema object describing the expected parameters
@@ -105,6 +141,13 @@ pub trait NodeType {
             "properties": {},
             "additionalProperties": true
         })
+    }
+
+    /// Get the required credential type name for this node
+    /// Returns None if the node doesn't require credentials
+    /// Returns Some(credential_type_name) if the node requires a specific credential type
+    fn required_credential_type(&self) -> Option<&str> {
+        None
     }
 }
 

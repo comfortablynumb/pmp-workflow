@@ -1,4 +1,4 @@
-use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeType};
+use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory, NodeType};
 use async_trait::async_trait;
 use cron::Schedule;
 use serde::Deserialize;
@@ -32,6 +32,10 @@ impl NodeType for ScheduleTriggerNode {
 
     fn category(&self) -> NodeCategory {
         NodeCategory::Trigger
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::Schedule
     }
 
     fn parameter_schema(&self) -> serde_json::Value {

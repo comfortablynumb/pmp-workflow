@@ -1,6 +1,8 @@
 use crate::db;
 use crate::execution::WorkflowEngine;
-use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeRegistry, NodeType};
+use crate::models::{
+    Node, NodeCategory, NodeContext, NodeOutput, NodeRegistry, NodeSubcategory, NodeType,
+};
 use async_trait::async_trait;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -41,6 +43,10 @@ impl NodeType for ExecuteWorkflowNode {
 
     fn category(&self) -> NodeCategory {
         NodeCategory::Action
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::Workflow
     }
 
     fn parameter_schema(&self) -> serde_json::Value {
