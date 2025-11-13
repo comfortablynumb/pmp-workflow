@@ -270,12 +270,14 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("workflow_visualizer", || {
         Box::new(WorkflowVisualizerNode::new())
     });
-    registry.register("workflow_debugger", || {
-        Box::new(WorkflowDebuggerNode::new())
-    });
-    registry.register("workflow_template", || {
-        Box::new(WorkflowTemplateNode::new())
-    });
+    registry.register(
+        "workflow_debugger",
+        || Box::new(WorkflowDebuggerNode::new()),
+    );
+    registry.register(
+        "workflow_template",
+        || Box::new(WorkflowTemplateNode::new()),
+    );
 
     // Sub-workflow execution (requires dependencies)
     let pool_clone = pool.clone();
