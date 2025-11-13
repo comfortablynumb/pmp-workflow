@@ -278,7 +278,6 @@ impl NodeType for DynamoDBNode {
             }
         })
     }
-
 }
 
 #[async_trait]
@@ -354,8 +353,12 @@ impl Node for DynamoDBNode {
                 }
             }
             "batch_get_item" => {
-                if params.request_items.is_none() && (params.table_name.is_none() || params.keys.is_none()) {
-                    anyhow::bail!("batch_get_item operation requires 'request_items' or both 'table_name' and 'keys' parameters");
+                if params.request_items.is_none()
+                    && (params.table_name.is_none() || params.keys.is_none())
+                {
+                    anyhow::bail!(
+                        "batch_get_item operation requires 'request_items' or both 'table_name' and 'keys' parameters"
+                    );
                 }
             }
             "batch_write_item" => {
@@ -365,7 +368,10 @@ impl Node for DynamoDBNode {
             }
             "transact_write_items" | "transact_get_items" => {
                 if params.transact_items.is_none() {
-                    anyhow::bail!("{} operation requires 'transact_items' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'transact_items' parameter",
+                        params.operation
+                    );
                 }
             }
             "create_table" => {
@@ -376,12 +382,17 @@ impl Node for DynamoDBNode {
                     anyhow::bail!("create_table operation requires 'key_schema' parameter");
                 }
                 if params.attribute_definitions.is_none() {
-                    anyhow::bail!("create_table operation requires 'attribute_definitions' parameter");
+                    anyhow::bail!(
+                        "create_table operation requires 'attribute_definitions' parameter"
+                    );
                 }
             }
             "delete_table" | "describe_table" => {
                 if params.table_name.is_none() {
-                    anyhow::bail!("{} operation requires 'table_name' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'table_name' parameter",
+                        params.operation
+                    );
                 }
             }
             "update_table" => {

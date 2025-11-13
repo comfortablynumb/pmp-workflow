@@ -234,7 +234,10 @@ impl Node for FtpNode {
         ];
 
         if remote_path_ops.contains(&params.operation.as_str()) && params.remote_path.is_none() {
-            anyhow::bail!("{} operation requires 'remote_path' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'remote_path' parameter",
+                params.operation
+            );
         }
 
         // Validate upload requires remote_path and (content or local_path)
@@ -243,27 +246,39 @@ impl Node for FtpNode {
                 anyhow::bail!("upload_file operation requires 'remote_path' parameter");
             }
             if params.content.is_none() && params.local_path.is_none() {
-                anyhow::bail!(
-                    "upload_file operation requires 'content' or 'local_path' parameter"
-                );
+                anyhow::bail!("upload_file operation requires 'content' or 'local_path' parameter");
             }
         }
 
         // Validate directory operations
-        if ["list_directory", "create_directory", "delete_directory", "directory_exists"]
-            .contains(&params.operation.as_str())
+        if [
+            "list_directory",
+            "create_directory",
+            "delete_directory",
+            "directory_exists",
+        ]
+        .contains(&params.operation.as_str())
             && params.directory.is_none()
         {
-            anyhow::bail!("{} operation requires 'directory' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'directory' parameter",
+                params.operation
+            );
         }
 
         // Validate rename/move operations
         if ["rename_file", "move_file"].contains(&params.operation.as_str()) {
             if params.from_path.is_none() {
-                anyhow::bail!("{} operation requires 'from_path' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'from_path' parameter",
+                    params.operation
+                );
             }
             if params.to_path.is_none() {
-                anyhow::bail!("{} operation requires 'to_path' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'to_path' parameter",
+                    params.operation
+                );
             }
         }
 

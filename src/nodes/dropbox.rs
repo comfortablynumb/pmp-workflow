@@ -270,10 +270,16 @@ impl Node for DropboxNode {
         // Validate move/copy operations
         if ["move_file", "copy_file"].contains(&params.operation.as_str()) {
             if params.from_path.is_none() {
-                anyhow::bail!("{} operation requires 'from_path' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'from_path' parameter",
+                    params.operation
+                );
             }
             if params.to_path.is_none() {
-                anyhow::bail!("{} operation requires 'to_path' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'to_path' parameter",
+                    params.operation
+                );
             }
         }
 

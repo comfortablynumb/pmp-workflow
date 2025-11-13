@@ -418,7 +418,10 @@ impl Node for GitHubNode {
         if ["get_issue", "update_issue", "close_issue"].contains(&params.operation.as_str())
             && params.issue_number.is_none()
         {
-            anyhow::bail!("{} operation requires 'issue_number' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'issue_number' parameter",
+                params.operation
+            );
         }
 
         // Validate PR operations
@@ -431,13 +434,14 @@ impl Node for GitHubNode {
         .contains(&params.operation.as_str())
             && params.pull_number.is_none()
         {
-            anyhow::bail!("{} operation requires 'pull_number' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'pull_number' parameter",
+                params.operation
+            );
         }
 
         // Validate create operations
-        if params.operation == "create_issue"
-            && params.title.is_none()
-        {
+        if params.operation == "create_issue" && params.title.is_none() {
             anyhow::bail!("create_issue operation requires 'title' parameter");
         }
 
@@ -453,9 +457,7 @@ impl Node for GitHubNode {
             }
         }
 
-        if params.operation == "create_release"
-            && params.tag_name.is_none()
-        {
+        if params.operation == "create_release" && params.tag_name.is_none() {
             anyhow::bail!("create_release operation requires 'tag_name' parameter");
         }
 
@@ -479,7 +481,8 @@ impl Node for GitHubNode {
         }
 
         // Validate search operations
-        if ["search_repositories", "search_issues", "search_code"].contains(&params.operation.as_str())
+        if ["search_repositories", "search_issues", "search_code"]
+            .contains(&params.operation.as_str())
             && params.query.is_none()
         {
             anyhow::bail!("{} operation requires 'query' parameter", params.operation);

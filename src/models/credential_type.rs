@@ -79,7 +79,10 @@ mod tests {
         );
 
         assert_eq!(cred_type.name, "github_token");
-        assert_eq!(cred_type.description, Some("GitHub Personal Access Token".to_string()));
+        assert_eq!(
+            cred_type.description,
+            Some("GitHub Personal Access Token".to_string())
+        );
         assert_eq!(cred_type.json_schema, schema);
     }
 
@@ -95,11 +98,7 @@ mod tests {
             "required": ["api_key"]
         });
 
-        let cred_type = CredentialType::new(
-            "test_type".to_string(),
-            None,
-            schema,
-        );
+        let cred_type = CredentialType::new("test_type".to_string(), None, schema);
 
         let valid_data = serde_json::json!({
             "api_key": "ghp_1234567890"
@@ -120,11 +119,7 @@ mod tests {
             "required": ["api_key"]
         });
 
-        let cred_type = CredentialType::new(
-            "test_type".to_string(),
-            None,
-            schema,
-        );
+        let cred_type = CredentialType::new("test_type".to_string(), None, schema);
 
         let invalid_data = serde_json::json!({
             "other_field": "value"
@@ -139,11 +134,7 @@ mod tests {
             "type": "object"
         });
 
-        let cred_type = CredentialType::new(
-            "test_type".to_string(),
-            None,
-            schema,
-        );
+        let cred_type = CredentialType::new("test_type".to_string(), None, schema);
 
         let invalid_data = serde_json::json!("not an object");
 

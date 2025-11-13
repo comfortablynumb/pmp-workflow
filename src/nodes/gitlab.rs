@@ -420,14 +420,20 @@ impl Node for GitLabNode {
         ];
 
         if project_ops.contains(&params.operation.as_str()) && params.project.is_none() {
-            anyhow::bail!("{} operation requires 'project' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'project' parameter",
+                params.operation
+            );
         }
 
         // Validate issue operations
         if ["get_issue", "update_issue", "close_issue"].contains(&params.operation.as_str())
             && params.issue_iid.is_none()
         {
-            anyhow::bail!("{} operation requires 'issue_iid' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'issue_iid' parameter",
+                params.operation
+            );
         }
 
         // Validate MR operations
@@ -471,18 +477,30 @@ impl Node for GitLabNode {
         if ["get_file", "delete_file"].contains(&params.operation.as_str())
             && params.file_path.is_none()
         {
-            anyhow::bail!("{} operation requires 'file_path' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'file_path' parameter",
+                params.operation
+            );
         }
 
         if ["create_file", "update_file"].contains(&params.operation.as_str()) {
             if params.file_path.is_none() {
-                anyhow::bail!("{} operation requires 'file_path' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'file_path' parameter",
+                    params.operation
+                );
             }
             if params.content.is_none() {
-                anyhow::bail!("{} operation requires 'content' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'content' parameter",
+                    params.operation
+                );
             }
             if params.commit_message.is_none() {
-                anyhow::bail!("{} operation requires 'commit_message' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'commit_message' parameter",
+                    params.operation
+                );
             }
         }
 

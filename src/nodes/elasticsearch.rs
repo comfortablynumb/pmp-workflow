@@ -241,7 +241,6 @@ impl NodeType for ElasticsearchNode {
             }
         })
     }
-
 }
 
 #[async_trait]
@@ -356,10 +355,16 @@ impl Node for ElasticsearchNode {
             }
             "restore_snapshot" | "delete_snapshot" => {
                 if params.repository.is_none() {
-                    anyhow::bail!("{} operation requires 'repository' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'repository' parameter",
+                        params.operation
+                    );
                 }
                 if params.snapshot.is_none() {
-                    anyhow::bail!("{} operation requires 'snapshot' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'snapshot' parameter",
+                        params.operation
+                    );
                 }
             }
             "cluster_health" | "cluster_stats" | "clear_cache" => {
@@ -389,7 +394,10 @@ mod tests {
     #[test]
     fn test_elasticsearch_required_credential_type() {
         let node = ElasticsearchNode::new();
-        assert_eq!(node.required_credential_type(), Some("elasticsearch_connection"));
+        assert_eq!(
+            node.required_credential_type(),
+            Some("elasticsearch_connection")
+        );
     }
 
     #[test]

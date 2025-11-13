@@ -300,21 +300,30 @@ impl Node for TwilioNode {
         if ["get_message", "delete_message"].contains(&params.operation.as_str())
             && params.message_sid.is_none()
         {
-            anyhow::bail!("{} operation requires 'message_sid' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'message_sid' parameter",
+                params.operation
+            );
         }
 
         // Validate call operations require call_sid
         if ["get_call", "update_call", "delete_call"].contains(&params.operation.as_str())
             && params.call_sid.is_none()
         {
-            anyhow::bail!("{} operation requires 'call_sid' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'call_sid' parameter",
+                params.operation
+            );
         }
 
         // Validate recording operations require recording_sid
         if ["get_recording", "delete_recording"].contains(&params.operation.as_str())
             && params.recording_sid.is_none()
         {
-            anyhow::bail!("{} operation requires 'recording_sid' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'recording_sid' parameter",
+                params.operation
+            );
         }
 
         // Validate lookup_phone requires to

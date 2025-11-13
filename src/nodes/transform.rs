@@ -94,12 +94,13 @@ fn extract_field(data: &serde_json::Value, path: &str) -> anyhow::Result<serde_j
 
         // Handle array indexing
         if let Some(idx_str) = part.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
-            && let Ok(idx) = idx_str.parse::<usize>() {
-                current = current
-                    .get(idx)
-                    .ok_or_else(|| anyhow::anyhow!("Array index out of bounds: {}", idx))?;
-                continue;
-            }
+            && let Ok(idx) = idx_str.parse::<usize>()
+        {
+            current = current
+                .get(idx)
+                .ok_or_else(|| anyhow::anyhow!("Array index out of bounds: {}", idx))?;
+            continue;
+        }
 
         // Regular field access
         current = current
@@ -124,9 +125,10 @@ fn substitute_template(
 
                 // Check if it's a variable reference
                 if let Some(var_name) = path.strip_prefix("$")
-                    && let Some(value) = context.get_variable(var_name) {
-                        return Ok(value.clone());
-                    }
+                    && let Some(value) = context.get_variable(var_name)
+                {
+                    return Ok(value.clone());
+                }
 
                 // Otherwise, extract from input
                 extract_field(input, path)

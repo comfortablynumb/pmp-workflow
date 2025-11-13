@@ -350,7 +350,10 @@ impl Node for SlackNode {
         // Validate that message operations have required parameters
         if ["send_message", "update_message"].contains(&params.operation.as_str()) {
             if params.channel.is_none() {
-                anyhow::bail!("{} operation requires 'channel' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'channel' parameter",
+                    params.operation
+                );
             }
             if params.text.is_none() && params.blocks.is_none() {
                 anyhow::bail!(
@@ -370,7 +373,9 @@ impl Node for SlackNode {
         // Validate that post_file has file_path or file_content
         if params.operation == "post_file" {
             if params.file_path.is_none() && params.file_content.is_none() {
-                anyhow::bail!("post_file operation requires either 'file_path' or 'file_content' parameter");
+                anyhow::bail!(
+                    "post_file operation requires either 'file_path' or 'file_content' parameter"
+                );
             }
             if params.channel.is_none() {
                 anyhow::bail!("post_file operation requires 'channel' parameter");
@@ -395,7 +400,10 @@ impl Node for SlackNode {
         .contains(&params.operation.as_str())
             && params.channel.is_none()
         {
-            anyhow::bail!("{} operation requires 'channel' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'channel' parameter",
+                params.operation
+            );
         }
 
         // Validate that invite_to_channel has users
@@ -426,7 +434,10 @@ impl Node for SlackNode {
         // Validate that reaction operations have required parameters
         if ["add_reaction", "remove_reaction"].contains(&params.operation.as_str()) {
             if params.channel.is_none() {
-                anyhow::bail!("{} operation requires 'channel' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'channel' parameter",
+                    params.operation
+                );
             }
             if params.ts.is_none() {
                 anyhow::bail!("{} operation requires 'ts' parameter", params.operation);

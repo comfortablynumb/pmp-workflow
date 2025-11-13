@@ -329,7 +329,10 @@ impl Node for TelegramNode {
         ];
 
         if chat_ops.contains(&params.operation.as_str()) && params.chat_id.is_none() {
-            anyhow::bail!("{} operation requires 'chat_id' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'chat_id' parameter",
+                params.operation
+            );
         }
 
         // Validate send_message requires text
@@ -357,11 +360,19 @@ impl Node for TelegramNode {
         }
 
         // Validate message operations require message_id
-        if ["edit_message", "delete_message", "pin_chat_message", "unpin_chat_message"]
-            .contains(&params.operation.as_str())
+        if [
+            "edit_message",
+            "delete_message",
+            "pin_chat_message",
+            "unpin_chat_message",
+        ]
+        .contains(&params.operation.as_str())
             && params.message_id.is_none()
         {
-            anyhow::bail!("{} operation requires 'message_id' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'message_id' parameter",
+                params.operation
+            );
         }
 
         // Validate member operations require user_id
@@ -375,7 +386,10 @@ impl Node for TelegramNode {
         .contains(&params.operation.as_str())
             && params.user_id.is_none()
         {
-            anyhow::bail!("{} operation requires 'user_id' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'user_id' parameter",
+                params.operation
+            );
         }
 
         // Validate callback query operations

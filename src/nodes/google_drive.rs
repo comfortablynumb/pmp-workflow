@@ -291,7 +291,10 @@ impl Node for GoogleDriveNode {
         ];
 
         if file_ops.contains(&params.operation.as_str()) && params.file_id.is_none() {
-            anyhow::bail!("{} operation requires 'file_id' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'file_id' parameter",
+                params.operation
+            );
         }
 
         // Validate upload requires name and content or file_path

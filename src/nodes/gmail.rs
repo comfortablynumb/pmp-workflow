@@ -397,7 +397,10 @@ impl Node for GmailNode {
                 anyhow::bail!("{} operation requires 'to' parameter", params.operation);
             }
             if params.subject.is_none() {
-                anyhow::bail!("{} operation requires 'subject' parameter", params.operation);
+                anyhow::bail!(
+                    "{} operation requires 'subject' parameter",
+                    params.operation
+                );
             }
             if params.body.is_none() {
                 anyhow::bail!("{} operation requires 'body' parameter", params.operation);
@@ -415,7 +418,10 @@ impl Node for GmailNode {
         .contains(&params.operation.as_str())
             && params.message_id.is_none()
         {
-            anyhow::bail!("{} operation requires 'message_id' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'message_id' parameter",
+                params.operation
+            );
         }
 
         // Validate that thread operations have thread_id
@@ -429,7 +435,10 @@ impl Node for GmailNode {
         .contains(&params.operation.as_str())
             && params.thread_id.is_none()
         {
-            anyhow::bail!("{} operation requires 'thread_id' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'thread_id' parameter",
+                params.operation
+            );
         }
 
         // Validate that draft operations have draft_id
@@ -437,7 +446,10 @@ impl Node for GmailNode {
             .contains(&params.operation.as_str())
             && params.draft_id.is_none()
         {
-            anyhow::bail!("{} operation requires 'draft_id' parameter", params.operation);
+            anyhow::bail!(
+                "{} operation requires 'draft_id' parameter",
+                params.operation
+            );
         }
 
         // Validate that modify_labels has add_labels or remove_labels

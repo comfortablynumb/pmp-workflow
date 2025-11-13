@@ -278,7 +278,6 @@ impl NodeType for DiscordNode {
             }
         })
     }
-
 }
 
 #[async_trait]
@@ -310,28 +309,43 @@ impl Node for DiscordNode {
                     anyhow::bail!("send_message operation requires 'channel_id' parameter");
                 }
                 if params.content.is_none() && params.embeds.is_none() {
-                    anyhow::bail!("send_message operation requires 'content' or 'embeds' parameter");
+                    anyhow::bail!(
+                        "send_message operation requires 'content' or 'embeds' parameter"
+                    );
                 }
             }
             "send_webhook_message" => {
                 if params.webhook_url.is_none() {
-                    anyhow::bail!("send_webhook_message operation requires 'webhook_url' parameter");
+                    anyhow::bail!(
+                        "send_webhook_message operation requires 'webhook_url' parameter"
+                    );
                 }
                 if params.content.is_none() && params.embeds.is_none() {
-                    anyhow::bail!("send_webhook_message operation requires 'content' or 'embeds' parameter");
+                    anyhow::bail!(
+                        "send_webhook_message operation requires 'content' or 'embeds' parameter"
+                    );
                 }
             }
             "edit_message" | "delete_message" | "get_message" => {
                 if params.channel_id.is_none() {
-                    anyhow::bail!("{} operation requires 'channel_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'channel_id' parameter",
+                        params.operation
+                    );
                 }
                 if params.message_id.is_none() {
-                    anyhow::bail!("{} operation requires 'message_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'message_id' parameter",
+                        params.operation
+                    );
                 }
             }
             "get_channel_messages" | "get_channel" | "update_channel" | "delete_channel" => {
                 if params.channel_id.is_none() {
-                    anyhow::bail!("{} operation requires 'channel_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'channel_id' parameter",
+                        params.operation
+                    );
                 }
             }
             "create_channel" => {
@@ -344,10 +358,16 @@ impl Node for DiscordNode {
             }
             "add_reaction" | "remove_reaction" => {
                 if params.channel_id.is_none() {
-                    anyhow::bail!("{} operation requires 'channel_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'channel_id' parameter",
+                        params.operation
+                    );
                 }
                 if params.message_id.is_none() {
-                    anyhow::bail!("{} operation requires 'message_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'message_id' parameter",
+                        params.operation
+                    );
                 }
                 if params.emoji.is_none() {
                     anyhow::bail!("{} operation requires 'emoji' parameter", params.operation);
@@ -363,39 +383,67 @@ impl Node for DiscordNode {
             }
             "join_thread" | "leave_thread" => {
                 if params.channel_id.is_none() {
-                    anyhow::bail!("{} operation requires 'channel_id' parameter (thread ID)", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'channel_id' parameter (thread ID)",
+                        params.operation
+                    );
                 }
             }
             "add_thread_member" | "remove_thread_member" => {
                 if params.channel_id.is_none() {
-                    anyhow::bail!("{} operation requires 'channel_id' parameter (thread ID)", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'channel_id' parameter (thread ID)",
+                        params.operation
+                    );
                 }
                 if params.user_id.is_none() {
-                    anyhow::bail!("{} operation requires 'user_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'user_id' parameter",
+                        params.operation
+                    );
                 }
             }
             "get_guild" | "list_guild_members" | "list_roles" => {
                 if params.guild_id.is_none() {
-                    anyhow::bail!("{} operation requires 'guild_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'guild_id' parameter",
+                        params.operation
+                    );
                 }
             }
-            "get_guild_member" | "kick_guild_member" | "ban_guild_member" | "unban_guild_member" => {
+            "get_guild_member" | "kick_guild_member" | "ban_guild_member"
+            | "unban_guild_member" => {
                 if params.guild_id.is_none() {
-                    anyhow::bail!("{} operation requires 'guild_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'guild_id' parameter",
+                        params.operation
+                    );
                 }
                 if params.user_id.is_none() {
-                    anyhow::bail!("{} operation requires 'user_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'user_id' parameter",
+                        params.operation
+                    );
                 }
             }
             "add_guild_member_role" | "remove_guild_member_role" => {
                 if params.guild_id.is_none() {
-                    anyhow::bail!("{} operation requires 'guild_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'guild_id' parameter",
+                        params.operation
+                    );
                 }
                 if params.user_id.is_none() {
-                    anyhow::bail!("{} operation requires 'user_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'user_id' parameter",
+                        params.operation
+                    );
                 }
                 if params.role_id.is_none() {
-                    anyhow::bail!("{} operation requires 'role_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'role_id' parameter",
+                        params.operation
+                    );
                 }
             }
             "create_role" => {
@@ -408,10 +456,16 @@ impl Node for DiscordNode {
             }
             "delete_role" | "update_role" => {
                 if params.guild_id.is_none() {
-                    anyhow::bail!("{} operation requires 'guild_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'guild_id' parameter",
+                        params.operation
+                    );
                 }
                 if params.role_id.is_none() {
-                    anyhow::bail!("{} operation requires 'role_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'role_id' parameter",
+                        params.operation
+                    );
                 }
             }
             _ => {

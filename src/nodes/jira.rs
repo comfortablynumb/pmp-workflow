@@ -251,7 +251,6 @@ impl NodeType for JiraNode {
             }
         })
     }
-
 }
 
 #[async_trait]
@@ -278,10 +277,17 @@ impl Node for JiraNode {
 
         // Validate based on operation
         match params.operation.as_str() {
-            "get_issue" | "delete_issue" | "get_issue_transitions" | "get_comments"
-            | "get_attachments" | "get_issue_worklogs" => {
+            "get_issue"
+            | "delete_issue"
+            | "get_issue_transitions"
+            | "get_comments"
+            | "get_attachments"
+            | "get_issue_worklogs" => {
                 if params.issue_key.is_none() {
-                    anyhow::bail!("{} operation requires 'issue_key' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'issue_key' parameter",
+                        params.operation
+                    );
                 }
             }
             "create_issue" => {
@@ -323,10 +329,16 @@ impl Node for JiraNode {
             }
             "update_comment" | "delete_comment" => {
                 if params.issue_key.is_none() {
-                    anyhow::bail!("{} operation requires 'issue_key' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'issue_key' parameter",
+                        params.operation
+                    );
                 }
                 if params.comment_id.is_none() {
-                    anyhow::bail!("{} operation requires 'comment_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'comment_id' parameter",
+                        params.operation
+                    );
                 }
             }
             "add_attachment" => {
@@ -334,7 +346,9 @@ impl Node for JiraNode {
                     anyhow::bail!("add_attachment operation requires 'issue_key' parameter");
                 }
                 if params.file_path.is_none() && params.file_content.is_none() {
-                    anyhow::bail!("add_attachment operation requires 'file_path' or 'file_content' parameter");
+                    anyhow::bail!(
+                        "add_attachment operation requires 'file_path' or 'file_content' parameter"
+                    );
                 }
             }
             "create_issue_link" => {
@@ -342,12 +356,17 @@ impl Node for JiraNode {
                     anyhow::bail!("create_issue_link operation requires 'link_type' parameter");
                 }
                 if params.inward_issue.is_none() || params.outward_issue.is_none() {
-                    anyhow::bail!("create_issue_link operation requires 'inward_issue' and 'outward_issue' parameters");
+                    anyhow::bail!(
+                        "create_issue_link operation requires 'inward_issue' and 'outward_issue' parameters"
+                    );
                 }
             }
             "get_project" | "create_project" => {
                 if params.project_key.is_none() {
-                    anyhow::bail!("{} operation requires 'project_key' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'project_key' parameter",
+                        params.operation
+                    );
                 }
             }
             "get_board" => {
@@ -357,7 +376,10 @@ impl Node for JiraNode {
             }
             "get_sprint" | "start_sprint" | "close_sprint" => {
                 if params.sprint_id.is_none() {
-                    anyhow::bail!("{} operation requires 'sprint_id' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'sprint_id' parameter",
+                        params.operation
+                    );
                 }
             }
             "list_sprints" => {

@@ -202,7 +202,6 @@ impl NodeType for MongoDBNode {
             }
         })
     }
-
 }
 
 #[async_trait]
@@ -231,7 +230,10 @@ impl Node for MongoDBNode {
         match params.operation.as_str() {
             "find" | "find_one" | "count_documents" | "distinct" => {
                 if params.collection.is_none() {
-                    anyhow::bail!("{} operation requires 'collection' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'collection' parameter",
+                        params.operation
+                    );
                 }
             }
             "insert_one" => {
@@ -252,18 +254,27 @@ impl Node for MongoDBNode {
             }
             "update_one" | "update_many" | "replace_one" => {
                 if params.collection.is_none() {
-                    anyhow::bail!("{} operation requires 'collection' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'collection' parameter",
+                        params.operation
+                    );
                 }
                 if params.filter.is_none() {
                     anyhow::bail!("{} operation requires 'filter' parameter", params.operation);
                 }
                 if params.update.is_none() && params.document.is_none() {
-                    anyhow::bail!("{} operation requires 'update' or 'document' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'update' or 'document' parameter",
+                        params.operation
+                    );
                 }
             }
             "delete_one" | "delete_many" => {
                 if params.collection.is_none() {
-                    anyhow::bail!("{} operation requires 'collection' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'collection' parameter",
+                        params.operation
+                    );
                 }
                 if params.filter.is_none() {
                     anyhow::bail!("{} operation requires 'filter' parameter", params.operation);
@@ -290,12 +301,17 @@ impl Node for MongoDBNode {
                     anyhow::bail!("drop_index operation requires 'collection' parameter");
                 }
                 if params.index_name.is_none() && params.index.is_none() {
-                    anyhow::bail!("drop_index operation requires 'index_name' or 'index' parameter");
+                    anyhow::bail!(
+                        "drop_index operation requires 'index_name' or 'index' parameter"
+                    );
                 }
             }
             "list_indexes" | "drop_collection" => {
                 if params.collection.is_none() {
-                    anyhow::bail!("{} operation requires 'collection' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'collection' parameter",
+                        params.operation
+                    );
                 }
             }
             "create_collection" => {

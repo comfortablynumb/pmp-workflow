@@ -295,10 +295,7 @@ impl Node for OpenAINode {
         if ["text_completion", "embedding", "moderation"].contains(&params.operation.as_str())
             && params.input.is_none()
         {
-            anyhow::bail!(
-                "{} operation requires 'input' parameter",
-                params.operation
-            );
+            anyhow::bail!("{} operation requires 'input' parameter", params.operation);
         }
 
         // Validate that image_generation has prompt

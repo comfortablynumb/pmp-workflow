@@ -176,7 +176,6 @@ impl NodeType for MySQLNode {
             }
         })
     }
-
 }
 
 #[async_trait]
@@ -219,7 +218,9 @@ impl Node for MySQLNode {
                     anyhow::bail!("insert operation requires 'table' parameter");
                 }
                 if params.data.is_none() && (params.columns.is_none() || params.values.is_none()) {
-                    anyhow::bail!("insert operation requires 'data' or both 'columns' and 'values' parameters");
+                    anyhow::bail!(
+                        "insert operation requires 'data' or both 'columns' and 'values' parameters"
+                    );
                 }
             }
             "update" => {
@@ -237,17 +238,25 @@ impl Node for MySQLNode {
             }
             "create_table" | "drop_table" | "alter_table" | "truncate_table" | "describe_table" => {
                 if params.table.is_none() && params.query.is_none() {
-                    anyhow::bail!("{} operation requires 'table' or 'query' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'table' or 'query' parameter",
+                        params.operation
+                    );
                 }
             }
             "create_database" | "drop_database" => {
                 if params.database.is_none() && params.query.is_none() {
-                    anyhow::bail!("{} operation requires 'database' or 'query' parameter", params.operation);
+                    anyhow::bail!(
+                        "{} operation requires 'database' or 'query' parameter",
+                        params.operation
+                    );
                 }
             }
             "execute_stored_procedure" => {
                 if params.query.is_none() {
-                    anyhow::bail!("execute_stored_procedure operation requires 'query' parameter (procedure name)");
+                    anyhow::bail!(
+                        "execute_stored_procedure operation requires 'query' parameter (procedure name)"
+                    );
                 }
             }
             "create_index" | "drop_index" => {

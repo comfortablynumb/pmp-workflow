@@ -144,15 +144,16 @@ impl WorkflowEngine {
             let mut input_data_json = serde_json::Map::new();
             for edge in &workflow.edges {
                 if edge.to == *node_id
-                    && let Some(input) = node_outputs.get(&edge.from) {
-                        let input_key = if edge.to_input.is_empty() {
-                            edge.from.clone()
-                        } else {
-                            edge.to_input.clone()
-                        };
-                        context.add_input(input_key.clone(), input.clone());
-                        input_data_json.insert(input_key, input.clone());
-                    }
+                    && let Some(input) = node_outputs.get(&edge.from)
+                {
+                    let input_key = if edge.to_input.is_empty() {
+                        edge.from.clone()
+                    } else {
+                        edge.to_input.clone()
+                    };
+                    context.add_input(input_key.clone(), input.clone());
+                    input_data_json.insert(input_key, input.clone());
+                }
             }
 
             // Store input data
@@ -389,15 +390,16 @@ impl WorkflowEngine {
             let outputs = node_outputs.read().await;
             for edge in &workflow_edges {
                 if edge.to == node_id
-                    && let Some(input) = outputs.get(&edge.from) {
-                        let input_key = if edge.to_input.is_empty() {
-                            edge.from.clone()
-                        } else {
-                            edge.to_input.clone()
-                        };
-                        context.add_input(input_key.clone(), input.clone());
-                        input_data_json.insert(input_key, input.clone());
-                    }
+                    && let Some(input) = outputs.get(&edge.from)
+                {
+                    let input_key = if edge.to_input.is_empty() {
+                        edge.from.clone()
+                    } else {
+                        edge.to_input.clone()
+                    };
+                    context.add_input(input_key.clone(), input.clone());
+                    input_data_json.insert(input_key, input.clone());
+                }
             }
         }
 
