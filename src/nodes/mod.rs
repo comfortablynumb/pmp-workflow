@@ -1,4 +1,6 @@
 pub mod anthropic;
+pub mod assertion;
+pub mod audit_trail;
 pub mod bedrock;
 pub mod circuit_breaker;
 pub mod conditional;
@@ -26,17 +28,22 @@ pub mod group_by;
 pub mod http_request;
 pub mod http_webhook;
 pub mod image_processor;
+pub mod integration_test_runner;
 pub mod jira;
 pub mod json_xml_converter;
+pub mod logging;
 pub mod loop_node;
 pub mod manual_trigger;
 pub mod map;
 pub mod merge_node;
+pub mod metrics;
+pub mod mock_server;
 pub mod mongodb;
 pub mod mysql;
 pub mod openai;
 pub mod pagerduty;
 pub mod pdf_generator;
+pub mod performance_dashboard;
 pub mod redis;
 pub mod reduce;
 pub mod retry;
@@ -51,14 +58,19 @@ pub mod start;
 pub mod stripe;
 pub mod switch_node;
 pub mod telegram;
+pub mod test_data_generator;
 pub mod timeout;
+pub mod tracing;
 pub mod transform;
 pub mod try_catch;
 pub mod twilio;
 pub mod wait_webhook;
 pub mod webhook_trigger;
+pub mod workflow_validator;
 
 pub use anthropic::AnthropicNode;
+pub use assertion::AssertionNode;
+pub use audit_trail::AuditTrailNode;
 pub use bedrock::BedrockNode;
 pub use circuit_breaker::CircuitBreakerNode;
 pub use conditional::ConditionalNode;
@@ -86,17 +98,22 @@ pub use group_by::GroupByNode;
 pub use http_request::HttpRequestNode;
 pub use http_webhook::HttpWebhookNode;
 pub use image_processor::ImageProcessorNode;
+pub use integration_test_runner::IntegrationTestRunnerNode;
 pub use jira::JiraNode;
 pub use json_xml_converter::JsonXmlConverterNode;
+pub use logging::LoggingNode;
 pub use loop_node::LoopNode;
 pub use manual_trigger::ManualTriggerNode;
 pub use map::MapNode;
 pub use merge_node::MergeNode;
+pub use metrics::MetricsNode;
+pub use mock_server::MockServerNode;
 pub use mongodb::MongoDBNode;
 pub use mysql::MySQLNode;
 pub use openai::OpenAINode;
 pub use pagerduty::PagerDutyNode;
 pub use pdf_generator::PdfGeneratorNode;
+pub use performance_dashboard::PerformanceDashboardNode;
 pub use redis::RedisNode;
 pub use reduce::ReduceNode;
 pub use retry::RetryNode;
@@ -111,12 +128,15 @@ pub use start::StartNode;
 pub use stripe::StripeNode;
 pub use switch_node::SwitchNode;
 pub use telegram::TelegramNode;
+pub use test_data_generator::TestDataGeneratorNode;
 pub use timeout::TimeoutNode;
+pub use tracing::TracingNode;
 pub use transform::TransformNode;
 pub use try_catch::TryCatchNode;
 pub use twilio::TwilioNode;
 pub use wait_webhook::WaitWebhookNode;
 pub use webhook_trigger::WebhookTriggerNode;
+pub use workflow_validator::WorkflowValidatorNode;
 
 use crate::models::NodeRegistry;
 use sqlx::PgPool;
@@ -213,6 +233,28 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("csv_excel", || Box::new(CsvExcelNode::new()));
     registry.register("json_xml_converter", || {
         Box::new(JsonXmlConverterNode::new())
+    });
+
+    // Testing & validation
+    registry.register("test_data_generator", || {
+        Box::new(TestDataGeneratorNode::new())
+    });
+    registry.register("workflow_validator", || {
+        Box::new(WorkflowValidatorNode::new())
+    });
+    registry.register("integration_test_runner", || {
+        Box::new(IntegrationTestRunnerNode::new())
+    });
+    registry.register("mock_server", || Box::new(MockServerNode::new()));
+    registry.register("assertion", || Box::new(AssertionNode::new()));
+
+    // Monitoring & observability
+    registry.register("metrics", || Box::new(MetricsNode::new()));
+    registry.register("logging", || Box::new(LoggingNode::new()));
+    registry.register("tracing", || Box::new(TracingNode::new()));
+    registry.register("audit_trail", || Box::new(AuditTrailNode::new()));
+    registry.register("performance_dashboard", || {
+        Box::new(PerformanceDashboardNode::new())
     });
 
     // Sub-workflow execution (requires dependencies)
