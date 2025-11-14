@@ -1,0 +1,326 @@
+# Monitoring and Observability Workflow
+# Demonstrates: Metrics, Logging, Tracing, CloudWatch, Datadog, PagerDuty
+# Use case: Comprehensive application monitoring and incident response
+
+name: Application Monitoring and Alerting
+description: Monitor application health, collect metrics, and respond to incidents
+version: "1.0"
+
+trigger:
+  type: schedule
+  schedule: "*/5 * * * *"  # Every 5 minutes
+
+nodes:
+  # Check application health
+  - id: health_check
+    type: http
+    parameters:
+      method: GET
+      url: "https://api.example.com/health"
+      timeout: 5000
+
+  # Emit health check metric
+  - id: emit_health_metric
+    type: metrics
+    parameters:
+      operation: emit
+      metric_name: "app.health.status"
+      value: "{{nodes.health_check.output.status_code == 200 ? 1 : 0}}"
+      unit: "count"
+      dimensions:
+        environment: production
+        service: api
+    depends_on:
+      - health_check
+
+  # Log health check result
+  - id: log_health_check
+    type: logging
+    parameters:
+      level: "{{nodes.health_check.output.status_code == 200 ? 'info' : 'error'}}"
+      message: "Health check completed"
+      metadata:
+        status_code: "{{nodes.health_check.output.status_code}}"
+        response_time: "{{nodes.health_check.output.response_time}}"
+        timestamp: "{{workflow.execution_time}}"
+    depends_on:
+      - health_check
+
+  # Send to CloudWatch
+  - id: send_cloudwatch_metric
+    type: aws_cloudwatch
+    parameters:
+      operation: put_metric_data
+      namespace: ApplicationMonitoring
+      metric_data:
+        - metric_name: HealthCheckStatus
+          value: "{{nodes.health_check.output.status_code == 200 ? 1 : 0}}"
+          unit: Count
+          dimensions:
+            - name: Environment
+              value: production
+        - metric_name: ResponseTime
+          value: "{{nodes.health_check.output.response_time}}"
+          unit: Milliseconds
+          dimensions:
+            - name: Environment
+              value: production
+    depends_on:
+      - health_check
+
+  # Check database connectivity
+  - id: check_database
+    type: database
+    parameters:
+      operation: query
+      query: "SELECT 1"
+      timeout: 3000
+    depends_on:
+      - health_check
+
+  # Emit database metric
+  - id: emit_db_metric
+    type: metrics
+    parameters:
+      operation: emit
+      metric_name: "app.database.connection"
+      value: "{{nodes.check_database.output ? 1 : 0}}"
+      unit: "count"
+      dimensions:
+        environment: production
+        database: postgres
+    depends_on:
+      - check_database
+
+  # Check cache connectivity
+  - id: check_redis
+    type: redis
+    parameters:
+      operation: ping
+    depends_on:
+      - health_check
+
+  # Emit cache metric
+  - id: emit_cache_metric
+    type: metrics
+    parameters:
+      operation: emit
+      metric_name: "app.cache.connection"
+      value: "{{nodes.check_redis.output ? 1 : 0}}"
+      unit: "count"
+      dimensions:
+        environment: production
+        cache: redis
+    depends_on:
+      - check_redis
+
+  # Get application metrics from Datadog
+  - id: get_datadog_metrics
+    type: datadog
+    parameters:
+      operation: query_metrics
+      query: "avg:system.cpu.user{env:production}"
+      from: "{{workflow.execution_time - 300}}"
+      to: "{{workflow.execution_time}}"
+    depends_on:
+      - emit_health_metric
+
+  # Check error rate
+  - id: check_error_rate
+    type: datadog
+    parameters:
+      operation: query_metrics
+      query: "sum:app.errors{env:production}.as_rate()"
+      from: "{{workflow.execution_time - 300}}"
+      to: "{{workflow.execution_time}}"
+    depends_on:
+      - get_datadog_metrics
+
+  # Evaluate if incident should be created
+  - id: evaluate_health
+    type: switch
+    parameters:
+      value: "{{nodes.health_check.output.status_code}}"
+      cases:
+        - condition: "!= 200"
+          next: create_incident
+        - condition: "== 200"
+          next: check_error_threshold
+    depends_on:
+      - health_check
+      - check_error_rate
+
+  # Check if error rate exceeds threshold
+  - id: check_error_threshold
+    type: switch
+    parameters:
+      value: "{{nodes.check_error_rate.output.series[0].pointlist[-1][1]}}"
+      cases:
+        - condition: "> 0.05"
+          next: create_incident
+        - condition: "<= 0.05"
+          next: log_success
+    depends_on:
+      - evaluate_health
+
+  # Create PagerDuty incident
+  - id: create_incident
+    type: pagerduty
+    parameters:
+      operation: create_incident
+      title: "Application health check failed"
+      urgency: high
+      body:
+        type: incident_body
+        details: |
+          Health check status: {{nodes.health_check.output.status_code}}
+          Error rate: {{nodes.check_error_rate.output.series[0].pointlist[-1][1]}}
+          Database: {{nodes.check_database.output ? 'Connected' : 'Disconnected'}}
+          Cache: {{nodes.check_redis.output ? 'Connected' : 'Disconnected'}}
+    depends_on:
+      - evaluate_health
+
+  # Add note to incident
+  - id: add_incident_note
+    type: pagerduty
+    parameters:
+      operation: create_note
+      incident_id: "{{nodes.create_incident.output.incident.id}}"
+      content: |
+        Additional diagnostics:
+        - CPU Usage: {{nodes.get_datadog_metrics.output.series[0].pointlist[-1][1]}}%
+        - Response Time: {{nodes.health_check.output.response_time}}ms
+        - Timestamp: {{workflow.execution_time}}
+    depends_on:
+      - create_incident
+
+  # Send Datadog event
+  - id: send_datadog_event
+    type: datadog
+    parameters:
+      operation: create_event
+      title: "Health check alert triggered"
+      text: "Application health check failed - PagerDuty incident created"
+      alert_type: error
+      tags:
+        - "env:production"
+        - "service:api"
+        - "incident_id:{{nodes.create_incident.output.incident.id}}"
+    depends_on:
+      - create_incident
+
+  # Create CloudWatch alarm
+  - id: create_cloudwatch_alarm
+    type: aws_cloudwatch
+    parameters:
+      operation: put_metric_alarm
+      alarm_name: "AppHealthCheckFailure"
+      comparison_operator: LessThanThreshold
+      evaluation_periods: 2
+      metric_name: HealthCheckStatus
+      namespace: ApplicationMonitoring
+      period: 300
+      statistic: Average
+      threshold: 1
+      alarm_description: "Health check is failing"
+      alarm_actions:
+        - "arn:aws:sns:us-east-1:123456789:critical-alerts"
+    depends_on:
+      - send_cloudwatch_metric
+
+  # Send Slack notification for incident
+  - id: notify_slack_incident
+    type: slack
+    parameters:
+      operation: send_message
+      channel: "#incidents"
+      text: "🚨 Application health incident created"
+      blocks:
+        - type: section
+          text:
+            type: mrkdwn
+            text: |
+              *Application Health Alert*
+
+              Status: Failed ❌
+              Incident: <https://pagerduty.com/incidents/{{nodes.create_incident.output.incident.id}}|View Incident>
+
+              *Diagnostics:*
+              • Health Check: {{nodes.health_check.output.status_code}}
+              • Error Rate: {{nodes.check_error_rate.output.series[0].pointlist[-1][1]}}
+              • Database: {{nodes.check_database.output ? '✅' : '❌'}}
+              • Cache: {{nodes.check_redis.output ? '✅' : '❌'}}
+              • CPU: {{nodes.get_datadog_metrics.output.series[0].pointlist[-1][1]}}%
+    depends_on:
+      - add_incident_note
+
+  # Log successful health check
+  - id: log_success
+    type: logging
+    parameters:
+      level: info
+      message: "Application health check passed"
+      metadata:
+        status_code: "{{nodes.health_check.output.status_code}}"
+        response_time: "{{nodes.health_check.output.response_time}}"
+        error_rate: "{{nodes.check_error_rate.output.series[0].pointlist[-1][1]}}"
+        cpu_usage: "{{nodes.get_datadog_metrics.output.series[0].pointlist[-1][1]}}"
+    depends_on:
+      - check_error_threshold
+
+  # Query recent CloudWatch logs for errors
+  - id: query_logs
+    type: aws_cloudwatch
+    parameters:
+      operation: query_logs
+      log_group_name: /aws/application/api
+      query: "fields @timestamp, @message | filter @message like /ERROR/ | sort @timestamp desc | limit 20"
+      start_time: "{{workflow.execution_time - 3600}}"
+      end_time: "{{workflow.execution_time}}"
+    depends_on:
+      - log_success
+
+  # Send daily health summary
+  - id: send_daily_summary
+    type: switch
+    parameters:
+      value: "{{workflow.execution_time | time_of_day}}"
+      cases:
+        - condition: "== '00:00'"
+          next: generate_summary
+    depends_on:
+      - query_logs
+
+  - id: generate_summary
+    type: template
+    parameters:
+      template: |
+        # Daily Health Summary
+
+        **Application Status:** {{nodes.health_check.output.status_code == 200 ? '✅ Healthy' : '❌ Unhealthy'}}
+
+        ## Metrics
+        - Health Check: {{nodes.health_check.output.status_code}}
+        - Response Time: {{nodes.health_check.output.response_time}}ms
+        - Error Rate: {{nodes.check_error_rate.output.series[0].pointlist[-1][1]}}
+        - CPU Usage: {{nodes.get_datadog_metrics.output.series[0].pointlist[-1][1]}}%
+
+        ## Services
+        - Database: {{nodes.check_database.output ? '✅ Connected' : '❌ Disconnected'}}
+        - Cache: {{nodes.check_redis.output ? '✅ Connected' : '❌ Disconnected'}}
+
+        ## Recent Errors
+        {{nodes.query_logs.output.results | length()}} errors in the last hour
+    depends_on:
+      - send_daily_summary
+
+  - id: send_summary_email
+    type: sendgrid
+    parameters:
+      operation: send_email
+      to: "ops-team@example.com"
+      subject: "Daily Application Health Summary"
+      content: "{{nodes.generate_summary.output.result}}"
+      content_type: text/html
+    depends_on:
+      - generate_summary

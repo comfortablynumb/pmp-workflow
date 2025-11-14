@@ -1,597 +1,759 @@
-# PMP Workflow
+# PMP Workflow Engine
 
-PMP Workflow: A no-code / low-code platform to create your own workflows. Part of Poor Man's Platform (PMP) ecosystem
+**A powerful, Rust-based workflow automation engine** - Part of the Poor Man's Platform (PMP) ecosystem
 
-A Rust-based workflow automation engine similar to n8n, with YAML-based configuration and PostgreSQL persistence. Execute workflows with extensible node types for various integrations and data processing tasks.
+Build complex workflow automations with 80+ built-in integrations, RBAC security, comprehensive audit logging, and YAML-based configuration. Similar to n8n, with PostgreSQL persistence and enterprise-grade features.
 
-## Features
+## 🚀 Key Features
 
-- **YAML Configuration**: Define workflows using simple YAML files
-- **Extensible Node System**: Easy-to-extend node architecture for custom integrations
-- **PostgreSQL Persistence**: Store workflows and execution history in PostgreSQL
-- **Multiple Trigger Types**:
-  - **Manual**: CLI or API-triggered execution
-  - **Webhook**: HTTP endpoint triggers
-  - **Schedule**: Cron-based scheduling (external scheduler required)
-- **Built-in Node Types**:
-  - **HTTP Request**: Make HTTP/REST API calls
-  - **Transform**: Transform and manipulate data
-  - **Conditional**: Branch based on conditions
-  - **Set Variable**: Manage workflow variables
-  - **Execute Workflow**: Execute sub-workflows
-- **Webhook Server**: Built-in HTTP server for webhook endpoints
-- **Execution Tracking**: Full execution history with detailed logging, including input/output for each node
-- **Execution Modes**: Sequential and true parallel execution with tokio
-- **Timeout Configuration**: Configurable timeouts at workflow and node level
-- **JSON Schema Support**: All node types expose JSON schemas for parameter validation
-- **Sub-Workflows**: Execute workflows from within other workflows
-- **CLI Interface**: Command-line tool for managing and executing workflows
+### Core Capabilities
+- **80+ Built-in Integrations**: AI providers, cloud services, databases, communication tools, and more
+- **YAML Configuration**: Define workflows using simple, readable YAML files
+- **PostgreSQL Persistence**: Store workflows and execution history with full audit trails
+- **Parallel & Sequential Execution**: True async execution with tokio for optimal performance
+- **Sub-Workflows**: Compose complex workflows from reusable components
+- **Extensible Architecture**: Easy-to-extend node system for custom integrations
 
-## Prerequisites
+### Security & Compliance
+- **Role-Based Access Control (RBAC)**: Fine-grained permissions (11 permission types, 4 pre-defined roles)
+- **Enhanced Audit Logging**: Track all actions with 27 event types, severity levels, and rich metadata
+- **Workflow-Specific ACLs**: Control access at the workflow level
+- **Credential Management**: Secure credential storage per integration
 
-- Rust 1.70+ (for building)
+### Developer Experience
+- **CLI Interface**: Comprehensive command-line tool for all operations
+- **Workflow Visualization**: Generate Mermaid, DOT, PlantUML, and ASCII diagrams
+- **Interactive Debugger**: Set breakpoints, inspect variables, step through executions
+- **Template System**: Reusable workflow templates with variable substitution
+- **Test Tools**: Mock servers, test data generators, integration test runners
+
+### Enterprise Features
+- **Timeout Configuration**: Workflow and node-level timeouts
+- **Error Handling**: Try/catch, retry logic, circuit breakers
+- **Control Flow**: Loops, switches, merges, splits, delays
+- **Data Transformation**: Filter, map, reduce, sort, group by, flatten
+- **Monitoring**: Metrics, logging, tracing, performance dashboards
+
+## 📦 Installation
+
+### Prerequisites
+- Rust 1.70+ (for building from source)
 - PostgreSQL 14+
-- Docker (optional, for running PostgreSQL)
+- Docker (optional, for PostgreSQL)
 
-## Installation
-
-### Clone and Build
+### Quick Start
 
 ```bash
+# Clone the repository
 git clone https://github.com/yourusername/pmp-workflow.git
 cd pmp-workflow
+
+# Build the project
 cargo build --release
-```
 
-The binary will be available at `target/release/pmp-workflow`.
-
-### Set Up PostgreSQL
-
-#### Using Docker
-
-```bash
+# Set up PostgreSQL with Docker
 docker run -d \
   --name pmp-workflow-db \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=pmp_workflow \
   -p 5432:5432 \
   postgres:16
-```
 
-#### Using Local PostgreSQL
-
-```bash
-createdb pmp_workflow
-```
-
-### Initialize Database
-
-Set the `DATABASE_URL` environment variable:
-
-```bash
+# Set DATABASE_URL environment variable
 export DATABASE_URL="postgres://postgres:postgres@localhost/pmp_workflow"
+
+# Initialize the database
+cargo run -- init
+
+# Import an example workflow
+cargo run -- import --file examples/simple_workflow.yaml
+
+# Execute the workflow
+cargo run -- execute "Simple Workflow"
 ```
 
-Initialize the database schema:
+## 🎯 Built-in Node Types (80+)
 
-```bash
-cargo run -- --database-url "$DATABASE_URL" init
+### Trigger Nodes
+Start your workflows with flexible trigger options:
+
+- **Manual Trigger** - CLI or API-triggered execution
+- **Webhook Trigger** - HTTP endpoint triggers
+- **Schedule Trigger** - Cron-based scheduling
+
+### AI & Machine Learning (7 nodes)
+- **OpenAI** - GPT-4, GPT-3.5-Turbo, embeddings, DALL-E
+- **Anthropic Claude** - Claude 3.5 Sonnet/Opus/Haiku, function calling
+- **Google Gemini** - Gemini Pro/Flash, multimodal AI
+- **Amazon Bedrock** - Access to Claude, Llama, Titan models
+- **Mistral AI** - Mistral Large/Medium/Small, embeddings
+- **Cohere** - Generate, chat, classify, summarize, rerank
+- **Hugging Face** - 100k+ models, inference, embeddings
+
+### Cloud Services
+
+#### AWS (6 nodes)
+- **AWS S3** - Object storage (multipart uploads, presigned URLs, lifecycle policies)
+- **AWS Lambda** - Function invocation, deployment, version management
+- **AWS SQS/SNS** - Message queuing and pub/sub (18 operations)
+- **AWS DynamoDB** - NoSQL database operations (CRUD, query, scan, batch)
+- **AWS CloudWatch** - Metrics, logs, alarms, statistics
+- **AWS Secrets Manager** - Secret rotation, versioning, tagging
+
+#### Azure (1 node)
+- **Azure Key Vault** - Secrets, keys, and certificates management
+
+### Secret Management (3 nodes)
+- **HashiCorp Vault** - Enterprise secret management (11 operations)
+- **AWS Secrets Manager** - AWS-native secrets with rotation
+- **Azure Key Vault** - Azure-integrated secret storage
+
+### Communication (6 nodes)
+- **Slack** - Send messages, create channels, manage users
+- **Gmail** - Send emails, read inbox, manage labels
+- **SendGrid** - Transactional email delivery
+- **Telegram** - Bot integration, send messages
+- **Twilio** - SMS, voice calls, WhatsApp
+- **Discord** - Bot integration, webhooks
+
+### Databases (5 nodes)
+- **PostgreSQL** - SQL queries, transactions
+- **MongoDB** - Document operations
+- **MySQL** - SQL queries
+- **Redis** - Cache operations, pub/sub
+- **Elasticsearch** - Search, indexing, aggregations
+
+### Development Tools (3 nodes)
+- **GitHub** - Repos, issues, pull requests, actions
+- **GitLab** - Projects, merge requests, CI/CD
+- **Jira** - Issue tracking, project management
+
+### File & Storage (4 nodes)
+- **Google Drive** - File upload/download, sharing
+- **Dropbox** - File operations
+- **FTP** - File transfer
+- **File Operations** - Read/write/convert local files
+
+### Google Workspace (3 nodes)
+- **Google Calendar** - Event management
+- **Google Sheets** - Spreadsheet operations
+- **Gmail** - Email management
+
+### Monitoring & Observability (5 nodes)
+- **PagerDuty** - Incident management, alerting
+- **Datadog** - Metrics, monitoring, alerts
+- **Metrics Node** - Custom metrics emission
+- **Logging Node** - Structured logging
+- **Tracing Node** - OpenTelemetry integration
+
+### Payment & Billing (1 node)
+- **Stripe** - Payments, subscriptions, customers (16 operations)
+
+### Data Processing (11 nodes)
+- **Transform** - Data manipulation with templates
+- **Filter** - Filter arrays by conditions
+- **Map** - Transform array elements
+- **Reduce** - Aggregate data
+- **Sort** - Sort arrays
+- **Group By** - Group data by key
+- **Flatten** - Flatten nested arrays
+- **CSV/Excel Parser** - Parse and generate spreadsheets
+- **JSON/XML Converter** - Convert between formats
+- **PDF Generator** - Create PDFs from templates
+- **Image Processor** - Resize, crop, optimize images
+
+### Control Flow (6 nodes)
+- **Conditional** - Branch based on conditions
+- **Loop** - Iterate over arrays
+- **Switch** - Multi-way branching
+- **Merge** - Combine multiple inputs
+- **Split** - Split data into multiple outputs
+- **Delay** - Wait for specified duration
+- **Wait Webhook** - Pause until webhook received
+
+### Error Handling & Resilience (4 nodes)
+- **Try/Catch** - Exception handling
+- **Retry** - Automatic retries with backoff
+- **Timeout** - Operation timeouts
+- **Circuit Breaker** - Fault tolerance
+
+### HTTP & Webhooks (2 nodes)
+- **HTTP Request** - Make REST API calls
+- **HTTP Webhook Sender** - Trigger external webhooks
+
+### Testing & Validation (5 nodes)
+- **Test Data Generator** - Generate realistic test data
+- **Workflow Validator** - Validate workflow YAML
+- **Integration Test Runner** - End-to-end testing
+- **Mock Server** - Simulate external APIs
+- **Assertion Node** - Validate data in workflows
+
+### Developer Experience (4 nodes)
+- **Workflow Runner** - Execute workflows programmatically
+- **Workflow Visualizer** - Generate diagrams (Mermaid, DOT, PlantUML, ASCII)
+- **Workflow Debugger** - Interactive debugging with breakpoints
+- **Workflow Template** - Template management and generation
+
+### Workflow Management (2 nodes)
+- **Execute Workflow** - Run sub-workflows
+- **Set Variable** - Manage workflow variables
+
+## 🔐 Role-Based Access Control (RBAC)
+
+### Permission Types (11)
+- `view_workflow` - View workflow definitions
+- `create_workflow` - Create new workflows
+- `edit_workflow` - Modify workflows
+- `delete_workflow` - Delete workflows
+- `execute_workflow` - Run workflows
+- `cancel_execution` - Cancel running executions
+- `view_execution` - View execution results
+- `manage_credentials` - Manage credentials
+- `manage_roles` - Manage user roles
+- `view_audit` - View audit logs
+- `manage_system` - System administration
+
+### Pre-defined Roles
+
+**Admin**
+- All permissions
+- Full system control
+
+**Developer**
+- Create, edit, and execute workflows
+- View executions
+- Limited administrative access
+
+**Operator**
+- Execute and cancel workflows
+- View workflows and executions
+- No modification permissions
+
+**Viewer**
+- Read-only access
+- View workflows and executions
+
+### Workflow-Specific ACLs
+
+Grant permissions at the workflow level:
+
+```yaml
+# Example: Grant user specific permissions for one workflow
+acl:
+  - user_id: "user@example.com"
+    permissions:
+      - execute_workflow
+      - view_execution
 ```
 
-Or using the built binary:
+## 📊 Enhanced Audit Logging
 
-```bash
-./target/release/pmp-workflow --database-url "$DATABASE_URL" init
-```
+### Audit Event Types (27)
 
-## Usage
+**Workflow Events:**
+- `workflow_created`, `workflow_updated`, `workflow_deleted`, `workflow_executed`
 
-### Import a Workflow
+**Execution Events:**
+- `execution_started`, `execution_completed`, `execution_failed`, `execution_cancelled`
+- `node_execution_started`, `node_execution_completed`, `node_execution_failed`
 
-Import a workflow from a YAML file:
+**Credential Events:**
+- `credential_created`, `credential_updated`, `credential_deleted`, `credential_accessed`
 
-```bash
-cargo run -- --database-url "$DATABASE_URL" import --file examples/simple_workflow.yaml
-```
+**RBAC Events:**
+- `role_created`, `role_updated`, `role_deleted`, `role_assigned`, `role_revoked`
+- `permission_granted`, `permission_revoked`
 
-### List Workflows
+**System Events:**
+- `system_config_changed`, `user_login`, `user_logout`, `unauthorized_access`
 
-List all workflows:
+### Severity Levels
+- **Info** - Normal operations
+- **Warning** - Important events
+- **Error** - Error conditions
+- **Critical** - Critical failures
 
-```bash
-cargo run -- --database-url "$DATABASE_URL" list
-```
+### Audit Metadata
+Track comprehensive details:
+- User ID, IP address, user agent
+- Resource type and ID
+- Workflow and execution IDs
+- Duration in milliseconds
+- Error messages
+- Custom metadata (JSON)
 
-List only active workflows:
+## 📝 Workflow Definition Format
 
-```bash
-cargo run -- --database-url "$DATABASE_URL" list --active
-```
-
-### Execute a Workflow
-
-Execute by workflow name:
-
-```bash
-cargo run -- --database-url "$DATABASE_URL" execute "Simple Workflow"
-```
-
-Execute with input data:
-
-```bash
-cargo run -- --database-url "$DATABASE_URL" execute "Simple Workflow" --input '{"value": 100, "timestamp": "2024-01-01"}'
-```
-
-Execute by workflow ID:
-
-```bash
-cargo run -- --database-url "$DATABASE_URL" execute "550e8400-e29b-41d4-a716-446655440000"
-```
-
-### View Execution History
-
-```bash
-cargo run -- --database-url "$DATABASE_URL" history "Simple Workflow" --limit 10
-```
-
-### View Execution Details
-
-```bash
-cargo run -- --database-url "$DATABASE_URL" show <execution-id>
-```
-
-## Workflow Definition Format
-
-Workflows are defined in YAML with the following structure:
+### Basic Structure
 
 ```yaml
 name: My Workflow
 description: Optional description
 
-# Execution configuration (optional)
-execution_mode: sequential  # or "parallel" (default: sequential)
-timeout_seconds: 300        # Global timeout in seconds (optional)
-
-nodes:
-  - id: unique_node_id
-    node_type: start|http_request|transform|conditional|set_variable
-    name: Human-readable name
-    timeout_seconds: 30     # Node-specific timeout (optional, overrides global)
-    parameters:
-      # Node-specific parameters
-
-edges:
-  - from: source_node_id
-    to: target_node_id
-    from_output: optional
-    to_input: optional
-```
-
-### Execution Configuration
-
-#### Execution Modes
-
-- **sequential** (default): Nodes execute one at a time in topological order
-- **parallel**: Nodes at the same dependency level execute concurrently using tokio tasks
-
-```yaml
-execution_mode: parallel
-```
-
-Parallel mode uses tokio::spawn to execute independent nodes concurrently, improving performance for workflows with parallel branches.
-
-#### Timeout Configuration
-
-Configure timeouts to prevent long-running operations:
-
-- **Workflow-level timeout**: Applies to all nodes by default
-- **Node-level timeout**: Overrides workflow timeout for specific nodes
-
-```yaml
-# Global timeout for all nodes
+# Execution configuration
+execution_mode: sequential  # or "parallel"
 timeout_seconds: 300
 
 nodes:
-  - id: fast_node
-    node_type: http_request
-    timeout_seconds: 10  # This node gets 10 seconds
-    # ...
-
-  - id: regular_node
-    node_type: transform
-    # No timeout specified - uses workflow timeout (300s)
-    # ...
-```
-
-If a node execution exceeds its timeout, the workflow fails with a timeout error.
-
-## Node Types
-
-### Trigger Nodes
-
-Trigger nodes define how a workflow is started. Every workflow should have one trigger node as the entry point.
-
-#### Manual Trigger
-
-Manually execute a workflow via CLI or API with custom input data.
-
-```yaml
-- id: manual_trigger
-  node_type: manual_trigger
-  name: Manual Trigger
-  parameters:
-    description: "Manually execute this workflow"
-    input_schema:  # Optional schema definition
-      type: object
-      properties:
-        order_id:
-          type: number
-```
-
-Execute manually:
-```bash
-cargo run -- execute "My Workflow" --input '{"order_id": 123}'
-```
-
-#### Webhook Trigger
-
-Trigger a workflow via HTTP webhook endpoint.
-
-```yaml
-- id: webhook_trigger
-  node_type: webhook_trigger
-  name: Webhook Trigger
-  parameters:
-    method: POST  # GET, POST, PUT, DELETE, PATCH
-    description: "Accepts webhook requests"
-```
-
-Start the webhook server:
-```bash
-cargo run -- serve --host 0.0.0.0 --port 3000
-```
-
-Trigger the workflow via HTTP:
-```bash
-curl -X POST http://localhost:3000/api/v1/webhook/{workflow-id}/trigger/{trigger-node-id} \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": 123, "action": "create"}'
-```
-
-#### Schedule Trigger
-
-Trigger a workflow based on a cron schedule. The workflow must be triggered externally by a scheduler.
-
-```yaml
-- id: schedule_trigger
-  node_type: schedule_trigger
-  name: Daily Schedule
-  parameters:
-    cron: "0 0 0 * * *"  # Daily at midnight (format: sec min hour day month day-of-week)
-    timezone: "UTC"
-    description: "Runs daily data sync"
-```
-
-Cron format: `second minute hour day-of-month month day-of-week`
-
-Common patterns:
-- `0 0 0 * * *` - Daily at midnight
-- `0 0 */2 * * *` - Every 2 hours
-- `0 */5 * * * *` - Every 5 minutes
-- `0 0 9-17 * * MON-FRI` - Weekdays 9am-5pm
-
-### Start Node (Legacy)
-
-Entry point for the workflow. Passes through input data. **Note:** Consider using trigger nodes instead.
-
-```yaml
-- id: start
-  node_type: start
-  name: Start
-  parameters: {}
-```
-
-### Action Nodes
-
-#### HTTP Request Node
-
-Makes HTTP requests to external APIs.
-
-```yaml
-- id: fetch_data
-  node_type: http_request
-  name: Fetch User Data
-  parameters:
-    url: "https://api.example.com/users"
-    method: "GET"  # GET, POST, PUT, DELETE, PATCH
-    headers:
-      Authorization: "Bearer token"
-    body:  # Optional, for POST/PUT/PATCH
-      key: "value"
-```
-
-### Transform Node
-
-Transforms data using expressions or templates.
-
-**Using Expression** (extract field):
-
-```yaml
-- id: extract
-  node_type: transform
-  name: Extract Field
-  parameters:
-    expression: "body.users[0].name"
-```
-
-**Using Template** (create new structure):
-
-```yaml
-- id: transform
-  node_type: transform
-  name: Transform Data
-  parameters:
-    template:
-      user_name: "{{name}}"
-      user_email: "{{email}}"
-      processed: true
-```
-
-**Variable References**:
-
-```yaml
-parameters:
-  template:
-    greeting: "{{$myVariable}}"  # Reference workflow variable
-```
-
-### Conditional Node
-
-Evaluates conditions for branching logic.
-
-```yaml
-- id: check
-  node_type: conditional
-  name: Check Value
-  parameters:
-    field: "value"
-    operator: "gt"  # eq, ne, gt, lt, gte, lte, contains
-    value: 50
-```
-
-Operators:
-- `eq`: Equal to
-- `ne`: Not equal to
-- `gt`: Greater than
-- `lt`: Less than
-- `gte`: Greater than or equal to
-- `lte`: Less than or equal to
-- `contains`: String contains (for strings)
-
-### Set Variable Node
-
-Sets workflow variables for use in downstream nodes.
-
-```yaml
-- id: set_var
-  node_type: set_variable
-  name: Set Variable
-  parameters:
-    name: "myVariable"
-    value: "Some value"
-    # or reference input field:
-    value: "{{input.field}}"
-```
-
-### Execute Workflow Node
-
-Executes another workflow as a sub-workflow.
-
-```yaml
-- id: sub_workflow
-  node_type: execute_workflow
-  name: Run Data Processing
-  parameters:
-    workflow_name: "Data Processing Workflow"  # or use workflow_id
-    input:
-      data: "{{input.raw_data}}"
-    wait: true  # Wait for completion (default: true)
-```
-
-Parameters:
-- `workflow_id` or `workflow_name`: Identifier of the workflow to execute
-- `input` (optional): Input data to pass to the sub-workflow
-- `wait` (optional, default: true): Whether to wait for completion
-
-This enables workflow composition and reusability.
-
-## Examples
-
-See the `examples/` directory for complete workflow examples:
-
-**Basic Workflows:**
-- `simple_workflow.yaml`: Basic workflow demonstrating variables and transforms
-- `http_workflow.yaml`: Fetching data from an API
-- `conditional_workflow.yaml`: Branching based on conditions
-- `complex_workflow.yaml`: Complex multi-step workflow
-
-**Trigger Workflows:**
-- `manual_trigger_workflow.yaml`: Manual workflow execution with input data
-- `webhook_trigger_workflow.yaml`: Webhook-triggered data processing
-- `schedule_trigger_workflow.yaml`: Scheduled data synchronization
-
-**Advanced Examples:**
-- `parallel_workflow.yaml`: Parallel execution with timeouts
-
-### Example: Simple HTTP API Workflow
-
-```yaml
-name: Fetch User Data
-description: Fetches user data from JSONPlaceholder API
-
-nodes:
-  - id: start
-    node_type: start
-    name: Start
-    parameters: {}
-
-  - id: fetch
-    node_type: http_request
-    name: Fetch Users
+  - id: trigger
+    node_type: manual_trigger
+    name: Start Workflow
     parameters:
-      url: "https://jsonplaceholder.typicode.com/users/1"
-      method: "GET"
+      description: "Manually start this workflow"
 
-  - id: extract
+  - id: process
     node_type: transform
-    name: Extract Name
+    name: Process Data
+    timeout_seconds: 30
     parameters:
-      expression: "body.name"
+      template:
+        result: "{{input.value * 2}}"
 
 edges:
-  - from: start
-    to: fetch
-  - from: fetch
-    to: extract
+  - from: trigger
+    to: process
 ```
 
-Import and run:
+### Execution Modes
+
+**Sequential** (default)
+```yaml
+execution_mode: sequential
+```
+Nodes execute one at a time in topological order.
+
+**Parallel**
+```yaml
+execution_mode: parallel
+```
+Independent nodes execute concurrently using tokio tasks for better performance.
+
+### Timeout Configuration
+
+**Workflow-level timeout** (applies to all nodes):
+```yaml
+timeout_seconds: 300
+```
+
+**Node-level timeout** (overrides workflow timeout):
+```yaml
+nodes:
+  - id: fast_operation
+    node_type: http_request
+    timeout_seconds: 10  # This node gets 10 seconds
+    parameters:
+      url: "https://api.example.com/quick"
+```
+
+## 🎨 Example Workflows
+
+### Example 1: AI-Powered Content Generation
+
+```yaml
+name: AI Content Generator
+description: Generate blog posts with AI
+
+nodes:
+  - id: trigger
+    node_type: manual_trigger
+    name: Manual Trigger
+    parameters:
+      description: "Start content generation"
+
+  - id: generate
+    node_type: anthropic
+    name: Generate Content
+    parameters:
+      operation: messages
+      model: claude-3-5-sonnet-20241022
+      messages:
+        - role: user
+          content: "Write a blog post about {{input.topic}}"
+      max_tokens: 2000
+
+  - id: save
+    node_type: file_operations
+    name: Save to File
+    parameters:
+      operation: write_file
+      path: "output/{{input.topic}}.md"
+      content: "{{generate.content}}"
+
+edges:
+  - from: trigger
+    to: generate
+  - from: generate
+    to: save
+```
+
+### Example 2: E-commerce Order Processing
+
+See `examples/ecommerce_order_processing.yaml` for a complete 22-node workflow including:
+- Fraud detection with circuit breaker
+- Stripe payment processing with retry logic
+- Inventory management
+- Parallel fulfillment (packing, invoice, shipping label)
+- Email notifications
+- Metrics tracking
+
+### Example 3: Data Pipeline ETL
+
+See `examples/data_pipeline_etl.yaml` for a complete 30-node workflow including:
+- Parallel extraction from PostgreSQL, MySQL, MongoDB, S3
+- Data transformation (filter, map, group, sort)
+- Quality checks and validation
+- Staging area loading
+- Production merge with upsert
+- S3 archival
+
+### Example 4: Lead Nurturing Campaign
+
+See `examples/lead_nurturing_campaign.yaml` for automation including:
+- CRM integration for lead enrichment
+- Lead scoring based on engagement
+- Routing (hot/warm/cold leads)
+- 7-email nurture sequence over 30 days
+- Engagement tracking
+- Sales qualification
+
+## 🔧 CLI Usage
+
+### Environment Setup
 
 ```bash
-cargo run -- --database-url "$DATABASE_URL" import --file my_workflow.yaml
-cargo run -- --database-url "$DATABASE_URL" execute "Fetch User Data"
+# Required: Set DATABASE_URL
+export DATABASE_URL="postgres://postgres:postgres@localhost/pmp_workflow"
 ```
 
-## Extending with Custom Nodes
+### Database Management
 
-To create custom node types:
+```bash
+# Initialize database schema
+./pmp-workflow init
 
-1. Create a new module in `src/nodes/`
-2. Implement the `Node` trait:
-
-```rust
-use crate::models::{Node, NodeContext, NodeOutput};
-use async_trait::async_trait;
-
-pub struct MyCustomNode;
-
-#[async_trait]
-impl Node for MyCustomNode {
-    fn node_type(&self) -> &str {
-        "my_custom_node"
-    }
-
-    async fn execute(
-        &self,
-        context: &NodeContext,
-        parameters: &serde_json::Value,
-    ) -> anyhow::Result<NodeOutput> {
-        // Your custom logic here
-        Ok(NodeOutput::success(serde_json::json!({"result": "success"})))
-    }
-
-    fn validate_parameters(&self, parameters: &serde_json::Value) -> anyhow::Result<()> {
-        // Validate parameters
-        Ok(())
-    }
-}
+# Run migrations
+./pmp-workflow migrate
 ```
 
-3. Register in `src/nodes/mod.rs`:
+### Workflow Management
 
-```rust
-pub fn register_builtin_nodes(registry: &mut NodeRegistry) {
-    // ... existing registrations
-    registry.register("my_custom_node", || Box::new(MyCustomNode));
-}
+```bash
+# Import workflow from YAML
+./pmp-workflow import --file workflow.yaml
+
+# List all workflows
+./pmp-workflow list
+
+# List only active workflows
+./pmp-workflow list --active
+
+# Delete a workflow
+./pmp-workflow delete "Workflow Name"
 ```
 
-## Architecture
+### Execution
+
+```bash
+# Execute by name
+./pmp-workflow execute "My Workflow"
+
+# Execute with input data
+./pmp-workflow execute "My Workflow" --input '{"key": "value"}'
+
+# Execute by ID
+./pmp-workflow execute "550e8400-e29b-41d4-a716-446655440000"
+```
+
+### Viewing Results
+
+```bash
+# View execution history
+./pmp-workflow history "My Workflow" --limit 10
+
+# View detailed execution
+./pmp-workflow show <execution-id>
+
+# View workflow definition
+./pmp-workflow get "My Workflow"
+```
+
+### Webhook Server
+
+```bash
+# Start webhook server
+./pmp-workflow serve --host 0.0.0.0 --port 3000
+
+# Trigger via HTTP
+curl -X POST http://localhost:3000/api/v1/webhook/{workflow-id}/trigger/{trigger-id} \
+  -H "Content-Type: application/json" \
+  -d '{"data": "value"}'
+```
+
+### Credentials Management
+
+```bash
+# Add credentials
+./pmp-workflow credentials add \
+  --name "my-api-key" \
+  --type "api_key" \
+  --value '{"api_key": "secret"}'
+
+# List credentials
+./pmp-workflow credentials list
+
+# Delete credentials
+./pmp-workflow credentials delete "my-api-key"
+```
+
+## 🏗️ Architecture
 
 ### Project Structure
 
 ```
 pmp-workflow/
 ├── src/
-│   ├── models/          # Data models (Workflow, Node, Execution)
-│   ├── db/              # Database layer (PostgreSQL)
-│   ├── nodes/           # Node implementations
+│   ├── models/          # Data models
+│   │   ├── workflow.rs  # Workflow definition
+│   │   ├── execution.rs # Execution tracking
+│   │   ├── rbac.rs      # Role-based access control
+│   │   ├── audit.rs     # Audit logging
+│   │   └── node.rs      # Node trait definitions
+│   ├── nodes/           # 80+ node implementations
 │   ├── execution/       # Workflow execution engine
-│   ├── config/          # YAML configuration loader
-│   ├── lib.rs           # Library root
-│   └── main.rs          # CLI application
-├── migrations/          # SQL migrations
+│   ├── db/              # PostgreSQL layer
+│   ├── config/          # YAML configuration
+│   └── server/          # Webhook HTTP server
 ├── examples/            # Example workflows
-└── Cargo.toml          # Dependencies
+├── migrations/          # Database migrations
+└── README.md           # This file
 ```
 
 ### Execution Flow
 
-1. Workflow is loaded from YAML or database
-2. Engine performs topological sort to determine execution order
-3. Nodes execute according to execution_mode (sequential or parallel)
-4. Each node execution is tracked in the database with:
-   - Input data received from predecessor nodes
-   - Output data produced by the node
-   - Start time, end time, and last update time
-   - Execution status (Running, Success, Failed)
-5. Timeouts are applied at node and workflow level
-6. Outputs flow through edges to downstream nodes
-7. Final result is stored in the execution record
+1. **Workflow Loading** - Load from YAML or database
+2. **Topological Sort** - Determine execution order
+3. **Mode Selection** - Sequential or parallel execution
+4. **Node Execution** - Execute with timeout and error handling
+5. **Output Propagation** - Pass data through edges
+6. **Audit Logging** - Track all actions and events
+7. **Result Storage** - Store execution results
 
-## Development
+### Database Schema
+
+Key tables:
+- `workflows` - Workflow definitions
+- `workflow_executions` - Execution records
+- `node_executions` - Individual node execution details
+- `credentials` - Secure credential storage
+- `roles` - RBAC role definitions
+- `user_roles` - User-role assignments
+- `workflow_acls` - Workflow-specific permissions
+- `audit_logs` - Comprehensive audit trail
+
+## 🛠️ Development
 
 ### Running Tests
 
 ```bash
+# Run all tests
 cargo test
+
+# Run specific test
+cargo test test_name
+
+# Run with output
+cargo test -- --nocapture
 ```
 
-### Running with Logging
+### Code Quality
 
 ```bash
-RUST_LOG=debug cargo run -- --database-url "$DATABASE_URL" execute "My Workflow"
-```
-
-### Code Formatting
-
-```bash
+# Format code
 cargo fmt
+
+# Run linter
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Check for security issues
+cargo audit
 ```
 
-### Linting
+### Adding Custom Nodes
 
-```bash
-cargo clippy
+1. Create new file in `src/nodes/`
+
+```rust
+use crate::models::{Node, NodeContext, NodeOutput, NodeType, NodeCategory, NodeSubcategory};
+use async_trait::async_trait;
+use anyhow::Result;
+use serde_json::Value;
+
+pub struct MyCustomNode;
+
+impl Default for MyCustomNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MyCustomNode {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl NodeType for MyCustomNode {
+    fn type_name(&self) -> &str {
+        "my_custom_node"
+    }
+
+    fn category(&self) -> NodeCategory {
+        NodeCategory::Action
+    }
+
+    fn subcategory(&self) -> NodeSubcategory {
+        NodeSubcategory::General
+    }
+}
+
+#[async_trait]
+impl Node for MyCustomNode {
+    async fn execute(
+        &self,
+        _context: &NodeContext,
+        parameters: &Value,
+    ) -> Result<NodeOutput> {
+        // Your implementation here
+        Ok(NodeOutput::success(serde_json::json!({
+            "status": "success"
+        })))
+    }
+
+    fn validate_parameters(&self, parameters: &Value) -> Result<()> {
+        // Validate parameters
+        Ok(())
+    }
+}
 ```
 
-## Contributing
+2. Register in `src/nodes/mod.rs`:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```rust
+pub mod my_custom_node;
+pub use my_custom_node::MyCustomNode;
 
-## License
+pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
+    // ... existing registrations
+    registry.register("my_custom_node", || Box::new(MyCustomNode::new()));
+}
+```
+
+3. Add tests in the same file:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_my_custom_node() {
+        let node = MyCustomNode::new();
+        let params = json!({});
+        let context = NodeContext::new(
+            Uuid::new_v4().to_string(),
+            "test".to_string()
+        );
+
+        let result = node.execute(&context, &params).await.unwrap();
+        assert_eq!(result.data["status"], "success");
+    }
+}
+```
+
+## 📚 Additional Resources
+
+### Example Workflows
+
+The `examples/` directory contains comprehensive examples:
+
+**Basic Examples:**
+- `simple_workflow.yaml` - Basic workflow with variables
+- `http_workflow.yaml` - API integration
+- `conditional_workflow.yaml` - Branching logic
+- `parallel_workflow.yaml` - Parallel execution
+
+**Advanced Examples:**
+- `ecommerce_order_processing.yaml` - 22-node e-commerce workflow
+- `lead_nurturing_campaign.yaml` - Marketing automation
+- `data_pipeline_etl.yaml` - 30-node data pipeline
+- `approval_chain.yaml` - Multi-level approval workflow
+- `ab_testing_framework.yaml` - A/B testing infrastructure
+
+### API Documentation
+
+Full API documentation is available in the code:
+- See trait definitions in `src/models/node.rs`
+- Each node type includes comprehensive examples
+- Parameter schemas are defined in each node
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Run `cargo fmt` and `cargo clippy`
+5. Submit a pull request
+
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Roadmap
+## 🗺️ Roadmap
 
-- [ ] Web UI for workflow creation and management
-- [ ] More built-in node types (Email, Slack, Database, etc.)
-- [x] Webhook triggers for workflows
-- [x] Scheduled workflow execution (cron-like configuration)
-- [x] Execution mode configuration (sequential/parallel)
+### Completed
+- [x] 80+ built-in node types
+- [x] RBAC with 11 permissions
+- [x] Enhanced audit logging (27 event types)
+- [x] Parallel execution with tokio
 - [x] Timeout configuration
-- [x] Enhanced execution tracking with input/output
-- [x] True parallel node execution with tokio
-- [x] JSON Schema support for node parameters
-- [x] Sub-workflows and workflow composition
-- [ ] Error handling and retry logic
-- [ ] Variable interpolation in all node parameters
-- [ ] Authentication and authorization
+- [x] Error handling (try/catch, retry, circuit breaker)
+- [x] Data transformation nodes
+- [x] Developer tools (visualizer, debugger, templates)
+- [x] Webhook triggers
+- [x] Schedule triggers
+- [x] Sub-workflows
+
+### In Progress
+- [ ] Web UI for workflow creation
+- [ ] Real-time execution monitoring
 - [ ] Workflow versioning
+- [ ] Multi-tenancy support
 
-## Related Projects
+### Planned
+- [ ] Workflow marketplace
+- [ ] Cloud deployment options
+- [ ] Mobile app for monitoring
+- [ ] Advanced analytics dashboard
+- [ ] Git integration for workflows
+- [ ] CI/CD integration
 
-- [n8n](https://n8n.io/) - Free and open fair-code licensed workflow automation tool
-- [Temporal](https://temporal.io/) - Open source durable execution platform
-- [Apache Airflow](https://airflow.apache.org/) - Platform to programmatically author, schedule and monitor workflows
+## 🙏 Acknowledgments
+
+Inspired by:
+- [n8n](https://n8n.io/) - Workflow automation
+- [Temporal](https://temporal.io/) - Durable execution
+- [Apache Airflow](https://airflow.apache.org/) - Workflow orchestration
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/pmp-workflow/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/pmp-workflow/discussions)
+- **Documentation**: [Wiki](https://github.com/yourusername/pmp-workflow/wiki)
+
+---
+
+**Built with ❤️ in Rust**
