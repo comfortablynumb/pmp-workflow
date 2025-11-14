@@ -2,7 +2,7 @@ use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Azure Key Vault integration for secret, key, and certificate management
 #[derive(Debug, Clone, Deserialize)]
@@ -34,6 +34,12 @@ pub struct AzureKeyVaultParams {
 }
 
 pub struct AzureKeyVaultNode;
+
+impl Default for AzureKeyVaultNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl AzureKeyVaultNode {
     pub fn new() -> Self {
@@ -135,7 +141,7 @@ impl NodeType for AzureKeyVaultNode {
 impl Node for AzureKeyVaultNode {
     async fn execute(
         &self,
-        context: &NodeContext,
+        _context: &NodeContext,
         parameters: &serde_json::Value,
     ) -> Result<NodeOutput> {
         let params: AzureKeyVaultParams = serde_json::from_value(parameters.clone())?;
@@ -148,7 +154,7 @@ impl Node for AzureKeyVaultNode {
         match params.operation.as_str() {
             "set_secret" => {
                 let secret_name = params.secret_name.as_ref().unwrap();
-                let secret_value = params.secret_value.as_ref().unwrap();
+                let _secret_value = params.secret_value.as_ref().unwrap();
                 let vault_url = params
                     .vault_url
                     .as_deref()
@@ -487,7 +493,7 @@ impl Node for AzureKeyVaultNode {
         let params: AzureKeyVaultParams = serde_json::from_value(parameters.clone())?;
 
         // Operations that require secret_name
-        let secret_name_required_ops = vec![
+        let secret_name_required_ops = [
             "set_secret",
             "get_secret",
             "delete_secret",
@@ -509,7 +515,7 @@ impl Node for AzureKeyVaultNode {
         }
 
         // Operations that require key_name
-        let key_name_required_ops = vec!["create_key", "get_key", "delete_key"];
+        let key_name_required_ops = ["create_key", "get_key", "delete_key"];
 
         if key_name_required_ops.contains(&params.operation.as_str()) && params.key_name.is_none() {
             anyhow::bail!(
@@ -519,7 +525,7 @@ impl Node for AzureKeyVaultNode {
         }
 
         // Operations that require certificate_name
-        let certificate_name_required_ops = vec![
+        let certificate_name_required_ops = [
             "import_certificate",
             "get_certificate",
             "delete_certificate",

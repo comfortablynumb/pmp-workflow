@@ -261,10 +261,10 @@ impl Node for AwsMessagingNode {
                         anyhow::bail!("send_message operation requires 'message_body' parameter");
                     }
                     // Validate delay_seconds if provided
-                    if let Some(delay) = params.delay_seconds {
-                        if delay > 900 {
-                            anyhow::bail!("delay_seconds must be between 0 and 900");
-                        }
+                    if let Some(delay) = params.delay_seconds
+                        && delay > 900
+                    {
+                        anyhow::bail!("delay_seconds must be between 0 and 900");
                     }
                 }
                 "receive_messages" => {
@@ -274,16 +274,16 @@ impl Node for AwsMessagingNode {
                         );
                     }
                     // Validate max_messages if provided
-                    if let Some(max) = params.max_messages {
-                        if max < 1 || max > 10 {
-                            anyhow::bail!("max_messages must be between 1 and 10");
-                        }
+                    if let Some(max) = params.max_messages
+                        && !(1..=10).contains(&max)
+                    {
+                        anyhow::bail!("max_messages must be between 1 and 10");
                     }
                     // Validate wait_time_seconds if provided
-                    if let Some(wait) = params.wait_time_seconds {
-                        if wait > 20 {
-                            anyhow::bail!("wait_time_seconds must be between 0 and 20");
-                        }
+                    if let Some(wait) = params.wait_time_seconds
+                        && wait > 20
+                    {
+                        anyhow::bail!("wait_time_seconds must be between 0 and 20");
                     }
                 }
                 "delete_message" => {
@@ -385,14 +385,14 @@ impl Node for AwsMessagingNode {
                         "application",
                         "lambda",
                     ];
-                    if let Some(protocol) = &params.protocol {
-                        if !valid_protocols.contains(&protocol.as_str()) {
-                            anyhow::bail!(
-                                "Invalid protocol: {}. Must be one of: {}",
-                                protocol,
-                                valid_protocols.join(", ")
-                            );
-                        }
+                    if let Some(protocol) = &params.protocol
+                        && !valid_protocols.contains(&protocol.as_str())
+                    {
+                        anyhow::bail!(
+                            "Invalid protocol: {}. Must be one of: {}",
+                            protocol,
+                            valid_protocols.join(", ")
+                        );
                     }
                 }
                 "unsubscribe" => {

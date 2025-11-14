@@ -2,7 +2,7 @@ use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// HashiCorp Vault integration for secret management
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +30,12 @@ pub struct VaultParams {
 }
 
 pub struct VaultNode;
+
+impl Default for VaultNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl VaultNode {
     pub fn new() -> Self {
@@ -121,7 +127,7 @@ impl NodeType for VaultNode {
 impl Node for VaultNode {
     async fn execute(
         &self,
-        context: &NodeContext,
+        _context: &NodeContext,
         parameters: &serde_json::Value,
     ) -> Result<NodeOutput> {
         let params: VaultParams = serde_json::from_value(parameters.clone())?;
@@ -154,7 +160,7 @@ impl Node for VaultNode {
             }
             "write_secret" => {
                 let path = params.path.as_ref().unwrap();
-                let data = params.data.as_ref().unwrap();
+                let _data = params.data.as_ref().unwrap();
                 let mount = params.mount.as_deref().unwrap_or("secret");
 
                 Ok(NodeOutput::success(json!({
@@ -208,77 +214,65 @@ impl Node for VaultNode {
                     }
                 })))
             }
-            "create_token" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "create_token",
-                    "auth": {
-                        "client_token": "hvs.CAESIJ...",
-                        "accessor": "hmac-sha256...",
-                        "policies": ["default", "app-policy"],
-                        "lease_duration": 3600,
-                        "renewable": true
+            "create_token" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "create_token",
+                "auth": {
+                    "client_token": "hvs.CAESIJ...",
+                    "accessor": "hmac-sha256...",
+                    "policies": ["default", "app-policy"],
+                    "lease_duration": 3600,
+                    "renewable": true
+                }
+            }))),
+            "renew_token" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "renew_token",
+                "auth": {
+                    "client_token": "hvs.CAESIJ...",
+                    "lease_duration": 3600,
+                    "renewable": true
+                }
+            }))),
+            "revoke_token" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "revoke_token",
+                "revoked": true
+            }))),
+            "approle_login" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "approle_login",
+                "auth": {
+                    "client_token": "hvs.CAESIJ...",
+                    "accessor": "hmac-sha256...",
+                    "policies": ["default", "app-policy"],
+                    "lease_duration": 3600,
+                    "renewable": true,
+                    "metadata": {
+                        "role_name": "my-role"
                     }
-                })))
-            }
-            "renew_token" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "renew_token",
-                    "auth": {
-                        "client_token": "hvs.CAESIJ...",
-                        "lease_duration": 3600,
-                        "renewable": true
-                    }
-                })))
-            }
-            "revoke_token" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "revoke_token",
-                    "revoked": true
-                })))
-            }
-            "approle_login" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "approle_login",
-                    "auth": {
-                        "client_token": "hvs.CAESIJ...",
-                        "accessor": "hmac-sha256...",
-                        "policies": ["default", "app-policy"],
-                        "lease_duration": 3600,
-                        "renewable": true,
-                        "metadata": {
-                            "role_name": "my-role"
-                        }
-                    }
-                })))
-            }
-            "enable_audit" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "enable_audit",
-                    "enabled": true,
-                    "type": "file",
-                    "path": "audit/"
-                })))
-            }
-            "seal_status" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "seal_status",
-                    "sealed": false,
-                    "type": "shamir",
-                    "initialized": true,
-                    "version": "1.15.0",
-                    "cluster_name": "vault-cluster-1",
-                    "cluster_id": "abc123...",
-                    "progress": 0,
-                    "n": 5,
-                    "t": 3
-                })))
-            }
+                }
+            }))),
+            "enable_audit" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "enable_audit",
+                "enabled": true,
+                "type": "file",
+                "path": "audit/"
+            }))),
+            "seal_status" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "seal_status",
+                "sealed": false,
+                "type": "shamir",
+                "initialized": true,
+                "version": "1.15.0",
+                "cluster_name": "vault-cluster-1",
+                "cluster_id": "abc123...",
+                "progress": 0,
+                "n": 5,
+                "t": 3
+            }))),
             _ => anyhow::bail!("Unsupported operation: {}", params.operation),
         }
     }
@@ -286,16 +280,14 @@ impl Node for VaultNode {
     fn validate_parameters(&self, parameters: &serde_json::Value) -> Result<()> {
         let params: VaultParams = serde_json::from_value(parameters.clone())?;
         // Operations that require path
-        let path_required_ops = vec![
+        let path_required_ops = [
             "read_secret",
             "write_secret",
             "delete_secret",
             "read_kv_metadata",
         ];
 
-        if path_required_ops.contains(&params.operation.as_str())
-            && params.path.is_none()
-        {
+        if path_required_ops.contains(&params.operation.as_str()) && params.path.is_none() {
             anyhow::bail!("{} operation requires 'path' parameter", params.operation);
         }
 
@@ -332,10 +324,7 @@ mod tests {
             "mount": "secret"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -355,10 +344,7 @@ mod tests {
             }
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -373,10 +359,7 @@ mod tests {
             "path": "myapp/"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -392,10 +375,7 @@ mod tests {
             "secret_id": "secret-456"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -409,10 +389,7 @@ mod tests {
             "operation": "read_secret"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await;
         assert!(result.is_err());

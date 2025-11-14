@@ -207,7 +207,7 @@ impl NodeType for AwsCloudWatchNode {
 impl Node for AwsCloudWatchNode {
     async fn execute(
         &self,
-        context: &NodeContext,
+        _context: &NodeContext,
         parameters: &serde_json::Value,
     ) -> anyhow::Result<NodeOutput> {
         let params: AwsCloudWatchParams = serde_json::from_value(parameters.clone())?;
@@ -484,10 +484,10 @@ impl Node for AwsCloudWatchNode {
                 );
             }
             // Validate period is multiple of 60
-            if let Some(period) = params.period {
-                if period % 60 != 0 {
-                    anyhow::bail!("period must be a multiple of 60 seconds");
-                }
+            if let Some(period) = params.period
+                && period % 60 != 0
+            {
+                anyhow::bail!("period must be a multiple of 60 seconds");
             }
         }
 

@@ -2,7 +2,7 @@ use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// AWS S3 advanced operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +56,12 @@ pub struct AwsS3Params {
 }
 
 pub struct AwsS3Node;
+
+impl Default for AwsS3Node {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl AwsS3Node {
     pub fn new() -> Self {
@@ -185,7 +191,11 @@ impl NodeType for AwsS3Node {
 
 #[async_trait]
 impl Node for AwsS3Node {
-    async fn execute(&self, context: &NodeContext, parameters: &serde_json::Value) -> Result<NodeOutput> {
+    async fn execute(
+        &self,
+        _context: &NodeContext,
+        parameters: &serde_json::Value,
+    ) -> Result<NodeOutput> {
         let params: AwsS3Params = serde_json::from_value(parameters.clone())?;
 
         // Validate required parameters
@@ -282,26 +292,24 @@ impl Node for AwsS3Node {
                     "key_count": 2
                 })))
             }
-            "list_buckets" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "list_buckets",
-                    "buckets": [
-                        {
-                            "name": "my-bucket-1",
-                            "creation_date": "2025-01-01T00:00:00Z"
-                        },
-                        {
-                            "name": "my-bucket-2",
-                            "creation_date": "2025-01-10T00:00:00Z"
-                        }
-                    ],
-                    "owner": {
-                        "id": "abc123",
-                        "display_name": "user"
+            "list_buckets" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "list_buckets",
+                "buckets": [
+                    {
+                        "name": "my-bucket-1",
+                        "creation_date": "2025-01-01T00:00:00Z"
+                    },
+                    {
+                        "name": "my-bucket-2",
+                        "creation_date": "2025-01-10T00:00:00Z"
                     }
-                })))
-            }
+                ],
+                "owner": {
+                    "id": "abc123",
+                    "display_name": "user"
+                }
+            }))),
             "create_bucket" => {
                 let bucket = params.bucket.as_ref().unwrap();
 
@@ -392,14 +400,12 @@ impl Node for AwsS3Node {
             "get_object_metadata",
         ];
 
-        if bucket_required_ops.contains(&params.operation.as_str())
-            && params.bucket.is_none()
-        {
+        if bucket_required_ops.contains(&params.operation.as_str()) && params.bucket.is_none() {
             anyhow::bail!("{} operation requires 'bucket' parameter", params.operation);
         }
 
         // Operations that require key
-        let key_required_ops = vec![
+        let key_required_ops = [
             "upload_object",
             "download_object",
             "delete_object",
@@ -447,10 +453,7 @@ mod tests {
             "content_type": "text/plain"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -467,10 +470,7 @@ mod tests {
             "prefix": "data/"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -488,14 +488,16 @@ mod tests {
             "source_key": "old-file.txt"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
-        assert!(result.data["source"].as_str().unwrap().contains("source-bucket"));
+        assert!(
+            result.data["source"]
+                .as_str()
+                .unwrap()
+                .contains("source-bucket")
+        );
     }
 
     #[tokio::test]
@@ -508,14 +510,16 @@ mod tests {
             "expires_in": 7200
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
-        assert!(result.data["url"].as_str().unwrap().contains("s3.amazonaws.com"));
+        assert!(
+            result.data["url"]
+                .as_str()
+                .unwrap()
+                .contains("s3.amazonaws.com")
+        );
     }
 
     #[tokio::test]
@@ -527,10 +531,7 @@ mod tests {
             "content": "test"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await;
         assert!(result.is_err());

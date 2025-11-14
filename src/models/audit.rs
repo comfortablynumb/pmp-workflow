@@ -171,11 +171,7 @@ pub struct AuditLog {
 }
 
 impl AuditLog {
-    pub fn new(
-        action: AuditAction,
-        user_id: String,
-        description: String,
-    ) -> Self {
+    pub fn new(action: AuditAction, user_id: String, description: String) -> Self {
         Self {
             id: Uuid::new_v4(),
             action: action.to_string(),
@@ -345,8 +341,14 @@ mod tests {
     #[test]
     fn test_audit_action_display() {
         assert_eq!(AuditAction::WorkflowCreated.to_string(), "workflow_created");
-        assert_eq!(AuditAction::ExecutionStarted.to_string(), "execution_started");
-        assert_eq!(AuditAction::UnauthorizedAccess.to_string(), "unauthorized_access");
+        assert_eq!(
+            AuditAction::ExecutionStarted.to_string(),
+            "execution_started"
+        );
+        assert_eq!(
+            AuditAction::UnauthorizedAccess.to_string(),
+            "unauthorized_access"
+        );
     }
 
     #[test]

@@ -31,6 +31,12 @@ pub struct AwsSecretsManagerParams {
 
 pub struct AwsSecretsManagerNode;
 
+impl Default for AwsSecretsManagerNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AwsSecretsManagerNode {
     pub fn new() -> Self {
         Self
@@ -118,7 +124,11 @@ impl NodeType for AwsSecretsManagerNode {
 
 #[async_trait]
 impl Node for AwsSecretsManagerNode {
-    async fn execute(&self, context: &NodeContext, parameters: &serde_json::Value) -> Result<NodeOutput> {
+    async fn execute(
+        &self,
+        _context: &NodeContext,
+        parameters: &serde_json::Value,
+    ) -> Result<NodeOutput> {
         let params: AwsSecretsManagerParams = serde_json::from_value(parameters.clone())?;
 
         // Validate required parameters
@@ -129,7 +139,7 @@ impl Node for AwsSecretsManagerNode {
         match params.operation.as_str() {
             "create_secret" => {
                 let secret_name = params.secret_name.as_ref().unwrap();
-                let secret_value = params.secret_value.as_ref().unwrap();
+                let _secret_value = params.secret_value.as_ref().unwrap();
 
                 Ok(NodeOutput::success(json!({
                     "success": true,
@@ -157,7 +167,7 @@ impl Node for AwsSecretsManagerNode {
             }
             "update_secret" => {
                 let secret_name = params.secret_name.as_ref().unwrap();
-                let secret_value = params.secret_value.as_ref().unwrap();
+                let _secret_value = params.secret_value.as_ref().unwrap();
 
                 Ok(NodeOutput::success(json!({
                     "success": true,
@@ -252,7 +262,7 @@ impl Node for AwsSecretsManagerNode {
             }
             "put_secret_value" => {
                 let secret_name = params.secret_name.as_ref().unwrap();
-                let secret_value = params.secret_value.as_ref().unwrap();
+                let _secret_value = params.secret_value.as_ref().unwrap();
 
                 Ok(NodeOutput::success(json!({
                     "success": true,
@@ -412,7 +422,7 @@ mod tests {
         assert_eq!(result.data["success"], true);
         assert_eq!(result.data["operation"], "list_secrets");
         assert!(result.data["secrets"].is_array());
-        assert!(result.data["secrets"].as_array().unwrap().len() > 0);
+        assert!(!result.data["secrets"].as_array().unwrap().is_empty());
     }
 
     #[tokio::test]

@@ -333,10 +333,10 @@ impl Node for AwsLambdaNode {
                     params.operation
                 );
             }
-            if let Some(ref name) = params.function_name {
-                if name.trim().is_empty() {
-                    anyhow::bail!("function_name cannot be empty");
-                }
+            if let Some(ref name) = params.function_name
+                && name.trim().is_empty()
+            {
+                anyhow::bail!("function_name cannot be empty");
             }
         }
 
@@ -381,17 +381,17 @@ impl Node for AwsLambdaNode {
         }
 
         // Validate timeout range
-        if let Some(timeout) = params.timeout {
-            if !(1..=900).contains(&timeout) {
-                anyhow::bail!("timeout must be between 1 and 900 seconds");
-            }
+        if let Some(timeout) = params.timeout
+            && !(1..=900).contains(&timeout)
+        {
+            anyhow::bail!("timeout must be between 1 and 900 seconds");
         }
 
         // Validate memory_size range
-        if let Some(memory_size) = params.memory_size {
-            if !(128..=10240).contains(&memory_size) {
-                anyhow::bail!("memory_size must be between 128 and 10240 MB");
-            }
+        if let Some(memory_size) = params.memory_size
+            && !(128..=10240).contains(&memory_size)
+        {
+            anyhow::bail!("memory_size must be between 128 and 10240 MB");
         }
 
         Ok(())

@@ -2,7 +2,7 @@ use crate::models::{Node, NodeCategory, NodeContext, NodeOutput, NodeSubcategory
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Mistral AI integration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +32,12 @@ pub struct MistralParams {
 }
 
 pub struct MistralNode;
+
+impl Default for MistralNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl MistralNode {
     pub fn new() -> Self {
@@ -131,7 +137,11 @@ impl NodeType for MistralNode {
 
 #[async_trait]
 impl Node for MistralNode {
-    async fn execute(&self, context: &NodeContext, parameters: &serde_json::Value) -> Result<NodeOutput> {
+    async fn execute(
+        &self,
+        _context: &NodeContext,
+        parameters: &serde_json::Value,
+    ) -> Result<NodeOutput> {
         let params: MistralParams = serde_json::from_value(parameters.clone())?;
 
         // Validate required parameters
@@ -141,10 +151,7 @@ impl Node for MistralNode {
         // This is a placeholder implementation
         match params.operation.as_str() {
             "chat_completion" => {
-                let model = params
-                    .model
-                    .as_deref()
-                    .unwrap_or("mistral-large-latest");
+                let model = params.model.as_deref().unwrap_or("mistral-large-latest");
 
                 Ok(NodeOutput::success(json!({
                     "success": true,
@@ -168,10 +175,7 @@ impl Node for MistralNode {
                 })))
             }
             "completion" => {
-                let model = params
-                    .model
-                    .as_deref()
-                    .unwrap_or("mistral-medium-latest");
+                let model = params.model.as_deref().unwrap_or("mistral-medium-latest");
 
                 Ok(NodeOutput::success(json!({
                     "success": true,
@@ -209,55 +213,50 @@ impl Node for MistralNode {
                     }
                 })))
             }
-            "list_models" => {
-                Ok(NodeOutput::success(json!({
-                    "success": true,
-                    "operation": "list_models",
-                    "data": [
-                        {
-                            "id": "mistral-large-latest",
-                            "object": "model",
-                            "created": 1700000000,
-                            "owned_by": "mistralai",
-                            "capabilities": {
-                                "completion_chat": true,
-                                "completion_fim": false,
-                                "function_calling": true,
-                                "fine_tuning": false
-                            }
-                        },
-                        {
-                            "id": "mistral-medium-latest",
-                            "object": "model",
-                            "created": 1700000000,
-                            "owned_by": "mistralai",
-                            "capabilities": {
-                                "completion_chat": true,
-                                "completion_fim": false,
-                                "function_calling": true,
-                                "fine_tuning": false
-                            }
-                        },
-                        {
-                            "id": "mistral-small-latest",
-                            "object": "model",
-                            "created": 1700000000,
-                            "owned_by": "mistralai",
-                            "capabilities": {
-                                "completion_chat": true,
-                                "completion_fim": false,
-                                "function_calling": true,
-                                "fine_tuning": false
-                            }
+            "list_models" => Ok(NodeOutput::success(json!({
+                "success": true,
+                "operation": "list_models",
+                "data": [
+                    {
+                        "id": "mistral-large-latest",
+                        "object": "model",
+                        "created": 1700000000,
+                        "owned_by": "mistralai",
+                        "capabilities": {
+                            "completion_chat": true,
+                            "completion_fim": false,
+                            "function_calling": true,
+                            "fine_tuning": false
                         }
-                    ]
-                })))
-            }
+                    },
+                    {
+                        "id": "mistral-medium-latest",
+                        "object": "model",
+                        "created": 1700000000,
+                        "owned_by": "mistralai",
+                        "capabilities": {
+                            "completion_chat": true,
+                            "completion_fim": false,
+                            "function_calling": true,
+                            "fine_tuning": false
+                        }
+                    },
+                    {
+                        "id": "mistral-small-latest",
+                        "object": "model",
+                        "created": 1700000000,
+                        "owned_by": "mistralai",
+                        "capabilities": {
+                            "completion_chat": true,
+                            "completion_fim": false,
+                            "function_calling": true,
+                            "fine_tuning": false
+                        }
+                    }
+                ]
+            }))),
             "get_model" => {
-                let model = params
-                    .model
-                    .as_deref()
-                    .unwrap_or("mistral-large-latest");
+                let model = params.model.as_deref().unwrap_or("mistral-large-latest");
 
                 Ok(NodeOutput::success(json!({
                     "success": true,
@@ -292,25 +291,23 @@ impl Node for MistralNode {
         }
 
         // Embeddings requires prompt or messages
-        if params.operation == "embeddings"
-            && params.prompt.is_none()
-            && params.messages.is_none()
+        if params.operation == "embeddings" && params.prompt.is_none() && params.messages.is_none()
         {
             anyhow::bail!("embeddings operation requires 'prompt' or 'messages' parameter");
         }
 
         // Validate temperature range
-        if let Some(temp) = params.temperature {
-            if !(0.0..=1.0).contains(&temp) {
-                anyhow::bail!("temperature must be between 0.0 and 1.0");
-            }
+        if let Some(temp) = params.temperature
+            && !(0.0..=1.0).contains(&temp)
+        {
+            anyhow::bail!("temperature must be between 0.0 and 1.0");
         }
 
         // Validate top_p range
-        if let Some(top_p) = params.top_p {
-            if !(0.0..=1.0).contains(&top_p) {
-                anyhow::bail!("top_p must be between 0.0 and 1.0");
-            }
+        if let Some(top_p) = params.top_p
+            && !(0.0..=1.0).contains(&top_p)
+        {
+            anyhow::bail!("top_p must be between 0.0 and 1.0");
         }
 
         Ok(())
@@ -335,10 +332,7 @@ mod tests {
             "max_tokens": 100
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -356,10 +350,7 @@ mod tests {
             "temperature": 0.8
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -375,10 +366,7 @@ mod tests {
             "prompt": "Hello world"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -392,10 +380,7 @@ mod tests {
             "operation": "list_models"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await.unwrap();
         assert_eq!(result.data["success"], true);
@@ -410,10 +395,7 @@ mod tests {
             "model": "mistral-large-latest"
         });
 
-        let context = NodeContext::new(
-            Uuid::new_v4().to_string(),
-            "test-workflow".to_string(),
-        );
+        let context = NodeContext::new(Uuid::new_v4().to_string(), "test-workflow".to_string());
 
         let result = node.execute(&context, &params).await;
         assert!(result.is_err());

@@ -207,7 +207,9 @@ impl RbacContext {
 
     /// Check if user has a specific permission globally
     pub fn has_permission(&self, permission: &Permission) -> bool {
-        self.roles.iter().any(|role| role.has_permission(permission))
+        self.roles
+            .iter()
+            .any(|role| role.has_permission(permission))
     }
 
     /// Check if user has permission for a specific workflow
@@ -364,11 +366,10 @@ mod tests {
         let admin_role = RoleTemplates::admin();
         let viewer_role = RoleTemplates::viewer();
 
-        let admin_context = RbacContext::new("admin-user".to_string())
-            .with_roles(vec![admin_role]);
+        let admin_context = RbacContext::new("admin-user".to_string()).with_roles(vec![admin_role]);
 
-        let viewer_context = RbacContext::new("viewer-user".to_string())
-            .with_roles(vec![viewer_role]);
+        let viewer_context =
+            RbacContext::new("viewer-user".to_string()).with_roles(vec![viewer_role]);
 
         assert!(admin_context.has_permission(&Permission::DeleteWorkflow));
         assert!(!viewer_context.has_permission(&Permission::DeleteWorkflow));
@@ -443,8 +444,7 @@ mod tests {
         let admin = RoleTemplates::admin();
         let developer = RoleTemplates::developer();
 
-        let context = RbacContext::new("user".to_string())
-            .with_roles(vec![admin, developer]);
+        let context = RbacContext::new("user".to_string()).with_roles(vec![admin, developer]);
 
         let all_perms = context.get_all_permissions();
         assert!(all_perms.contains(&Permission::ManageSystem));
