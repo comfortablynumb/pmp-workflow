@@ -1,8 +1,16 @@
 pub mod anthropic;
 pub mod assertion;
 pub mod audit_trail;
+pub mod aws_cloudwatch;
+pub mod aws_dynamodb;
+pub mod aws_lambda;
+pub mod aws_messaging;
+pub mod aws_s3;
+pub mod aws_secrets_manager;
+pub mod azure_key_vault;
 pub mod bedrock;
 pub mod circuit_breaker;
+pub mod cohere;
 pub mod conditional;
 pub mod csv_excel;
 pub mod database_query;
@@ -27,6 +35,7 @@ pub mod google_sheets;
 pub mod group_by;
 pub mod http_request;
 pub mod http_webhook;
+pub mod huggingface;
 pub mod image_processor;
 pub mod integration_test_runner;
 pub mod jira;
@@ -37,6 +46,7 @@ pub mod manual_trigger;
 pub mod map;
 pub mod merge_node;
 pub mod metrics;
+pub mod mistral;
 pub mod mock_server;
 pub mod mongodb;
 pub mod mysql;
@@ -64,6 +74,7 @@ pub mod tracing;
 pub mod transform;
 pub mod try_catch;
 pub mod twilio;
+pub mod vault;
 pub mod wait_webhook;
 pub mod webhook_trigger;
 pub mod workflow_debugger;
@@ -75,8 +86,16 @@ pub mod workflow_visualizer;
 pub use anthropic::AnthropicNode;
 pub use assertion::AssertionNode;
 pub use audit_trail::AuditTrailNode;
+pub use aws_cloudwatch::AwsCloudWatchNode;
+pub use aws_dynamodb::AwsDynamoDBNode;
+pub use aws_lambda::AwsLambdaNode;
+pub use aws_messaging::AwsMessagingNode;
+pub use aws_s3::AwsS3Node;
+pub use aws_secrets_manager::AwsSecretsManagerNode;
+pub use azure_key_vault::AzureKeyVaultNode;
 pub use bedrock::BedrockNode;
 pub use circuit_breaker::CircuitBreakerNode;
+pub use cohere::CohereNode;
 pub use conditional::ConditionalNode;
 pub use csv_excel::CsvExcelNode;
 pub use database_query::DatabaseQueryNode;
@@ -101,6 +120,7 @@ pub use google_sheets::GoogleSheetsNode;
 pub use group_by::GroupByNode;
 pub use http_request::HttpRequestNode;
 pub use http_webhook::HttpWebhookNode;
+pub use huggingface::HuggingFaceNode;
 pub use image_processor::ImageProcessorNode;
 pub use integration_test_runner::IntegrationTestRunnerNode;
 pub use jira::JiraNode;
@@ -111,6 +131,7 @@ pub use manual_trigger::ManualTriggerNode;
 pub use map::MapNode;
 pub use merge_node::MergeNode;
 pub use metrics::MetricsNode;
+pub use mistral::MistralNode;
 pub use mock_server::MockServerNode;
 pub use mongodb::MongoDBNode;
 pub use mysql::MySQLNode;
@@ -138,6 +159,7 @@ pub use tracing::TracingNode;
 pub use transform::TransformNode;
 pub use try_catch::TryCatchNode;
 pub use twilio::TwilioNode;
+pub use vault::VaultNode;
 pub use wait_webhook::WaitWebhookNode;
 pub use webhook_trigger::WebhookTriggerNode;
 pub use workflow_debugger::WorkflowDebuggerNode;
@@ -181,6 +203,25 @@ pub fn register_builtin_nodes(registry: &mut NodeRegistry, pool: &PgPool) {
     registry.register("gemini", || Box::new(GeminiNode::new()));
     registry.register("bedrock", || Box::new(BedrockNode::new()));
     registry.register("anthropic", || Box::new(AnthropicNode::new()));
+    registry.register("mistral", || Box::new(MistralNode::new()));
+    registry.register("huggingface", || Box::new(HuggingFaceNode::new()));
+    registry.register("cohere", || Box::new(CohereNode::new()));
+
+    // AWS services
+    registry.register("aws_lambda", || Box::new(AwsLambdaNode::new()));
+    registry.register("aws_cloudwatch", || Box::new(AwsCloudWatchNode::new()));
+    registry.register("aws_dynamodb", || Box::new(AwsDynamoDBNode::new()));
+    registry.register("aws_messaging", || Box::new(AwsMessagingNode::new()));
+    registry.register("aws_s3", || Box::new(AwsS3Node::new()));
+    registry.register("aws_secrets_manager", || {
+        Box::new(AwsSecretsManagerNode::new())
+    });
+
+    // Azure services
+    registry.register("azure_key_vault", || Box::new(AzureKeyVaultNode::new()));
+
+    // Secret management
+    registry.register("vault", || Box::new(VaultNode::new()));
 
     // Communication nodes
     registry.register("slack", || Box::new(SlackNode::new()));
