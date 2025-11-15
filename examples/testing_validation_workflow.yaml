@@ -1,0 +1,349 @@
+# Testing and Validation Workflow
+# Demonstrates: Test Data Generator, Mock Server, Assertion, Integration Test Runner
+# Use case: Automated testing of API endpoints with mock data
+
+name: API Integration Testing Pipeline
+description: Generate test data, mock external services, and validate API responses
+version: "1.0"
+
+trigger:
+  type: manual
+  parameters:
+    api_base_url: string
+    test_suite: string
+
+nodes:
+  # Generate test user data
+  - id: generate_users
+    type: test_data_generator
+    parameters:
+      operation: generate_users
+      count: 10
+      include_fields:
+        - email
+        - name
+        - phone
+        - address
+
+  # Generate test product data
+  - id: generate_products
+    type: test_data_generator
+    parameters:
+      operation: generate_products
+      count: 20
+      categories:
+        - electronics
+        - clothing
+        - books
+
+  # Start mock payment service
+  - id: start_mock_payment
+    type: mock_server
+    parameters:
+      operation: start
+      port: 8080
+      endpoints:
+        - path: /api/payment/process
+          method: POST
+          response:
+            status: 200
+            body:
+              transaction_id: "mock-txn-{{random_uuid}}"
+              status: approved
+              amount: "{{request.body.amount}}"
+        - path: /api/payment/refund
+          method: POST
+          response:
+            status: 200
+            body:
+              refund_id: "mock-refund-{{random_uuid}}"
+              status: completed
+
+  # Start mock email service
+  - id: start_mock_email
+    type: mock_server
+    parameters:
+      operation: start
+      port: 8081
+      endpoints:
+        - path: /api/email/send
+          method: POST
+          response:
+            status: 202
+            body:
+              message_id: "mock-email-{{random_uuid}}"
+              status: queued
+    depends_on:
+      - start_mock_payment
+
+  # Test user registration endpoint
+  - id: test_user_registration
+    type: loop
+    parameters:
+      items: "{{nodes.generate_users.output.users}}"
+      node:
+        type: http
+        parameters:
+          method: POST
+          url: "{{trigger.api_base_url}}/api/users/register"
+          headers:
+            Content-Type: application/json
+          body:
+            email: "{{item.email}}"
+            name: "{{item.name}}"
+            phone: "{{item.phone}}"
+    depends_on:
+      - generate_users
+      - start_mock_email
+
+  # Validate registration responses
+  - id: validate_registrations
+    type: assertion
+    parameters:
+      operation: assert_all
+      assertions:
+        - name: "All users registered successfully"
+          condition: "{{nodes.test_user_registration.output.results | map('status_code') | all(equals(201))}}"
+          error_message: "Some user registrations failed"
+        - name: "All responses have user_id"
+          condition: "{{nodes.test_user_registration.output.results | map('body.user_id') | all(exists())}}"
+          error_message: "Missing user_id in responses"
+        - name: "Email sent for each registration"
+          condition: "{{nodes.test_user_registration.output.results | map('body.email_sent') | all(equals(true))}}"
+          error_message: "Email not sent for some registrations"
+    depends_on:
+      - test_user_registration
+
+  # Test product creation
+  - id: test_product_creation
+    type: loop
+    parameters:
+      items: "{{nodes.generate_products.output.products}}"
+      node:
+        type: http
+        parameters:
+          method: POST
+          url: "{{trigger.api_base_url}}/api/products"
+          headers:
+            Content-Type: application/json
+          body:
+            name: "{{item.name}}"
+            price: "{{item.price}}"
+            category: "{{item.category}}"
+            stock: "{{item.stock}}"
+    depends_on:
+      - generate_products
+
+  # Validate product creation
+  - id: validate_products
+    type: assertion
+    parameters:
+      operation: assert_all
+      assertions:
+        - name: "All products created"
+          condition: "{{nodes.test_product_creation.output.results | length() == 20}}"
+        - name: "All have product IDs"
+          condition: "{{nodes.test_product_creation.output.results | map('body.product_id') | all(exists())}}"
+    depends_on:
+      - test_product_creation
+
+  # Test order creation with payment
+  - id: test_order_creation
+    type: http
+    parameters:
+      method: POST
+      url: "{{trigger.api_base_url}}/api/orders"
+      headers:
+        Content-Type: application/json
+      body:
+        user_id: "{{nodes.test_user_registration.output.results[0].body.user_id}}"
+        products:
+          - product_id: "{{nodes.test_product_creation.output.results[0].body.product_id}}"
+            quantity: 2
+        payment_method: credit_card
+    depends_on:
+      - validate_registrations
+      - validate_products
+
+  # Validate order response
+  - id: validate_order
+    type: assertion
+    parameters:
+      operation: assert_all
+      assertions:
+        - name: "Order created successfully"
+          condition: "{{nodes.test_order_creation.output.status_code == 201}}"
+        - name: "Order has ID"
+          condition: "{{nodes.test_order_creation.output.body.order_id | exists()}}"
+        - name: "Payment processed"
+          condition: "{{nodes.test_order_creation.output.body.payment_status == 'approved'}}"
+        - name: "Total amount matches"
+          condition: "{{nodes.test_order_creation.output.body.total_amount > 0}}"
+    depends_on:
+      - test_order_creation
+
+  # Test order retrieval
+  - id: test_get_order
+    type: http
+    parameters:
+      method: GET
+      url: "{{trigger.api_base_url}}/api/orders/{{nodes.test_order_creation.output.body.order_id}}"
+    depends_on:
+      - validate_order
+
+  # Validate retrieved order
+  - id: validate_retrieved_order
+    type: assertion
+    parameters:
+      operation: assert_all
+      assertions:
+        - name: "Order retrieved"
+          condition: "{{nodes.test_get_order.output.status_code == 200}}"
+        - name: "Order ID matches"
+          condition: "{{nodes.test_get_order.output.body.order_id == nodes.test_order_creation.output.body.order_id}}"
+    depends_on:
+      - test_get_order
+
+  # Test refund process
+  - id: test_refund
+    type: http
+    parameters:
+      method: POST
+      url: "{{trigger.api_base_url}}/api/orders/{{nodes.test_order_creation.output.body.order_id}}/refund"
+      headers:
+        Content-Type: application/json
+      body:
+        reason: "Customer request"
+    depends_on:
+      - validate_retrieved_order
+
+  # Validate refund
+  - id: validate_refund
+    type: assertion
+    parameters:
+      operation: assert_all
+      assertions:
+        - name: "Refund initiated"
+          condition: "{{nodes.test_refund.output.status_code == 200}}"
+        - name: "Refund ID exists"
+          condition: "{{nodes.test_refund.output.body.refund_id | exists()}}"
+        - name: "Refund status is completed"
+          condition: "{{nodes.test_refund.output.body.status == 'completed'}}"
+    depends_on:
+      - test_refund
+
+  # Run integration test suite
+  - id: run_integration_tests
+    type: integration_test_runner
+    parameters:
+      operation: run_suite
+      test_suite: "{{trigger.test_suite}}"
+      environment:
+        API_BASE_URL: "{{trigger.api_base_url}}"
+        PAYMENT_SERVICE_URL: "http://localhost:8080"
+        EMAIL_SERVICE_URL: "http://localhost:8081"
+      parallel: true
+    depends_on:
+      - validate_refund
+
+  # Validate integration test results
+  - id: validate_integration_tests
+    type: assertion
+    parameters:
+      operation: assert_all
+      assertions:
+        - name: "All integration tests passed"
+          condition: "{{nodes.run_integration_tests.output.passed == nodes.run_integration_tests.output.total}}"
+          error_message: "{{nodes.run_integration_tests.output.failed}} integration tests failed"
+        - name: "No test errors"
+          condition: "{{nodes.run_integration_tests.output.errors == 0}}"
+    depends_on:
+      - run_integration_tests
+
+  # Stop mock servers
+  - id: stop_mock_payment
+    type: mock_server
+    parameters:
+      operation: stop
+      server_id: "{{nodes.start_mock_payment.output.server_id}}"
+    depends_on:
+      - validate_integration_tests
+
+  - id: stop_mock_email
+    type: mock_server
+    parameters:
+      operation: stop
+      server_id: "{{nodes.start_mock_email.output.server_id}}"
+    depends_on:
+      - validate_integration_tests
+
+  # Generate test report
+  - id: generate_report
+    type: template
+    parameters:
+      template: |
+        # API Testing Report
+
+        ## Summary
+        - Total Users Tested: {{nodes.generate_users.output.users | length()}}
+        - Total Products Created: {{nodes.generate_products.output.products | length()}}
+        - Orders Created: 1
+        - Refunds Processed: 1
+
+        ## Integration Tests
+        - Total: {{nodes.run_integration_tests.output.total}}
+        - Passed: {{nodes.run_integration_tests.output.passed}}
+        - Failed: {{nodes.run_integration_tests.output.failed}}
+        - Duration: {{nodes.run_integration_tests.output.duration}}ms
+
+        ## Assertions
+        - User Registration: ✅ Passed
+        - Product Creation: ✅ Passed
+        - Order Creation: ✅ Passed
+        - Order Retrieval: ✅ Passed
+        - Refund Processing: ✅ Passed
+        - Integration Suite: {{nodes.run_integration_tests.output.passed == nodes.run_integration_tests.output.total ? '✅ Passed' : '❌ Failed'}}
+
+        ## Mock Services
+        - Payment Service: Stopped
+        - Email Service: Stopped
+    depends_on:
+      - stop_mock_payment
+      - stop_mock_email
+
+  # Send test results
+  - id: send_results
+    type: slack
+    parameters:
+      operation: send_message
+      channel: "#qa-team"
+      text: "API integration tests completed"
+      blocks:
+        - type: section
+          text:
+            type: mrkdwn
+            text: "{{nodes.generate_report.output.result}}"
+    depends_on:
+      - generate_report
+
+on_error:
+  # Stop mock servers on error
+  - id: cleanup_payment_mock
+    type: mock_server
+    parameters:
+      operation: stop
+      server_id: "{{nodes.start_mock_payment.output.server_id}}"
+
+  - id: cleanup_email_mock
+    type: mock_server
+    parameters:
+      operation: stop
+      server_id: "{{nodes.start_mock_email.output.server_id}}"
+
+  # Send failure notification
+  - id: notify_failure
+    type: slack
+    parameters:
+      operation: send_message
+      channel: "#qa-team"
+      text: "⚠️ API integration tests failed - check logs for details"

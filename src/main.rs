@@ -11,9 +11,9 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 
-    /// Database URL
+    /// Database URL (can also be set via DATABASE_URL environment variable)
     #[arg(long, env = "DATABASE_URL")]
-    database_url: String,
+    database_url: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -86,8 +86,15 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    // Get database URL from CLI arg or environment variable
+    let database_url = cli.database_url.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Database URL not provided. Set DATABASE_URL environment variable or use --database-url flag"
+        )
+    })?;
+
     // Create database pool
-    let pool = db::create_pool(&cli.database_url).await?;
+    let pool = db::create_pool(&database_url).await?;
 
     match cli.command {
         Commands::Init => {

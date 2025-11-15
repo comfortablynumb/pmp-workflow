@@ -1,0 +1,147 @@
+# AI Content Generation Workflow
+# Demonstrates AI nodes: Anthropic, Mistral, Cohere, HuggingFace
+# Use case: Generate blog post content using multiple AI providers
+
+name: AI Content Generation Pipeline
+description: Generate and enhance blog content using multiple AI providers
+version: "1.0"
+
+trigger:
+  type: manual
+  parameters:
+    topic: string
+    target_audience: string
+    tone: string
+
+nodes:
+  # Generate initial outline using Anthropic Claude
+  - id: generate_outline
+    type: anthropic
+    parameters:
+      operation: create_message
+      model: claude-3-5-sonnet-20241022
+      messages:
+        - role: user
+          content: "Create a detailed outline for a blog post about {{trigger.topic}} for {{trigger.target_audience}}. Use a {{trigger.tone}} tone."
+      max_tokens: 2000
+      temperature: 0.7
+
+  # Generate introduction using Mistral
+  - id: generate_intro
+    type: mistral
+    parameters:
+      operation: chat_completion
+      model: mistral-large-latest
+      messages:
+        - role: system
+          content: "You are an expert content writer."
+        - role: user
+          content: "Based on this outline:\n{{nodes.generate_outline.output.content[0].text}}\n\nWrite an engaging introduction for the blog post."
+      temperature: 0.8
+      max_tokens: 500
+    depends_on:
+      - generate_outline
+
+  # Generate main content sections using Cohere
+  - id: generate_body
+    type: cohere
+    parameters:
+      operation: generate
+      model: command
+      prompt: |
+        Outline: {{nodes.generate_outline.output.content[0].text}}
+        Introduction: {{nodes.generate_intro.output.choices[0].message.content}}
+
+        Write the main body sections of the blog post with detailed explanations and examples.
+      max_tokens: 2000
+      temperature: 0.7
+    depends_on:
+      - generate_intro
+
+  # Generate conclusion using HuggingFace
+  - id: generate_conclusion
+    type: huggingface
+    parameters:
+      operation: text_generation
+      model: gpt2-large
+      inputs: "Write a compelling conclusion for this blog post:\n{{nodes.generate_body.output.generations[0].text}}"
+      parameters:
+        max_new_tokens: 300
+        temperature: 0.8
+    depends_on:
+      - generate_body
+
+  # Combine all sections
+  - id: combine_content
+    type: template
+    parameters:
+      template: |
+        # {{trigger.topic}}
+
+        ## Introduction
+        {{nodes.generate_intro.output.choices[0].message.content}}
+
+        ## Main Content
+        {{nodes.generate_body.output.generations[0].text}}
+
+        ## Conclusion
+        {{nodes.generate_conclusion.output[0].generated_text}}
+      variables:
+        topic: "{{trigger.topic}}"
+    depends_on:
+      - generate_conclusion
+
+  # Generate SEO metadata using Cohere classify
+  - id: generate_seo
+    type: cohere
+    parameters:
+      operation: summarize
+      text: "{{nodes.combine_content.output.result}}"
+      model: command
+      length: short
+      format: paragraph
+    depends_on:
+      - combine_content
+
+  # Create embeddings for content search using HuggingFace
+  - id: create_embeddings
+    type: huggingface
+    parameters:
+      operation: feature_extraction
+      model: sentence-transformers/all-MiniLM-L6-v2
+      inputs: "{{nodes.combine_content.output.result}}"
+    depends_on:
+      - combine_content
+
+  # Store final content with metadata
+  - id: store_content
+    type: http
+    parameters:
+      method: POST
+      url: "https://api.example.com/blog-posts"
+      headers:
+        Content-Type: application/json
+      body:
+        content: "{{nodes.combine_content.output.result}}"
+        seo_summary: "{{nodes.generate_seo.output.summary}}"
+        embeddings: "{{nodes.create_embeddings.output[0]}}"
+        topic: "{{trigger.topic}}"
+        audience: "{{trigger.target_audience}}"
+    depends_on:
+      - generate_seo
+      - create_embeddings
+
+  # Send notification
+  - id: notify_complete
+    type: slack
+    parameters:
+      operation: send_message
+      channel: "#content-team"
+      text: "New blog post generated: {{trigger.topic}}"
+      blocks:
+        - type: section
+          text:
+            type: mrkdwn
+            text: "*Blog Post Generated*\n\nTopic: {{trigger.topic}}\nAudience: {{trigger.target_audience}}\n\nSEO Summary:\n{{nodes.generate_seo.output.summary}}"
+    depends_on:
+      - store_content

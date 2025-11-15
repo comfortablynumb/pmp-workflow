@@ -1,0 +1,335 @@
+# Data Transformation Pipeline
+# Demonstrates: Transform, Filter, Map, Reduce, Sort, Group By, Join, Aggregate
+# Use case: Complex data processing and transformation workflow
+
+name: Customer Data ETL Pipeline
+description: Extract customer data, transform it, and load into analytics database
+version: "1.0"
+
+trigger:
+  type: schedule
+  schedule: "0 2 * * *"  # Daily at 2 AM
+
+nodes:
+  # Extract customer data from API
+  - id: extract_customers
+    type: http
+    parameters:
+      method: GET
+      url: "https://api.example.com/customers?page=1&limit=1000"
+      headers:
+        Authorization: "Bearer {{env.API_TOKEN}}"
+
+  # Extract orders data
+  - id: extract_orders
+    type: http
+    parameters:
+      method: GET
+      url: "https://api.example.com/orders?page=1&limit=5000"
+      headers:
+        Authorization: "Bearer {{env.API_TOKEN}}"
+
+  # Parse customer JSON
+  - id: parse_customers
+    type: json_parse
+    parameters:
+      json_string: "{{nodes.extract_customers.output.body}}"
+    depends_on:
+      - extract_customers
+
+  # Parse orders JSON
+  - id: parse_orders
+    type: json_parse
+    parameters:
+      json_string: "{{nodes.extract_orders.output.body}}"
+    depends_on:
+      - extract_orders
+
+  # Filter active customers only
+  - id: filter_active_customers
+    type: filter
+    parameters:
+      operation: filter
+      array: "{{nodes.parse_customers.output.customers}}"
+      condition: "item.status == 'active'"
+    depends_on:
+      - parse_customers
+
+  # Transform customer data structure
+  - id: transform_customers
+    type: transform
+    parameters:
+      operation: transform
+      data: "{{nodes.filter_active_customers.output.filtered}}"
+      mapping:
+        customer_id: "id"
+        full_name: "concat(first_name, ' ', last_name)"
+        email_normalized: "lower(email)"
+        registration_date: "parse_date(created_at)"
+        country_code: "upper(country)"
+        lifetime_value: "coalesce(ltv, 0)"
+    depends_on:
+      - filter_active_customers
+
+  # Group orders by customer
+  - id: group_orders
+    type: group_by
+    parameters:
+      operation: group
+      array: "{{nodes.parse_orders.output.orders}}"
+      key: "customer_id"
+      aggregations:
+        total_orders: "count()"
+        total_spent: "sum(total_amount)"
+        average_order: "avg(total_amount)"
+        last_order_date: "max(order_date)"
+    depends_on:
+      - parse_orders
+
+  # Join customers with order aggregations
+  - id: join_customer_orders
+    type: join
+    parameters:
+      operation: join
+      left: "{{nodes.transform_customers.output.transformed}}"
+      right: "{{nodes.group_orders.output.grouped}}"
+      left_key: "customer_id"
+      right_key: "customer_id"
+      join_type: "left"
+    depends_on:
+      - transform_customers
+      - group_orders
+
+  # Calculate customer segments
+  - id: calculate_segments
+    type: map
+    parameters:
+      operation: map
+      array: "{{nodes.join_customer_orders.output.joined}}"
+      expression: |
+        {
+          ...item,
+          segment: item.total_spent > 10000 ? 'premium' :
+                   item.total_spent > 5000 ? 'gold' :
+                   item.total_spent > 1000 ? 'silver' : 'bronze',
+          is_active: item.last_order_date > date_sub(now(), days(90)),
+          risk_score: calculate_risk(item)
+        }
+    depends_on:
+      - join_customer_orders
+
+  # Sort customers by lifetime value
+  - id: sort_by_value
+    type: sort
+    parameters:
+      operation: sort
+      array: "{{nodes.calculate_segments.output.mapped}}"
+      key: "lifetime_value"
+      order: "desc"
+    depends_on:
+      - calculate_segments
+
+  # Get top 100 customers
+  - id: top_customers
+    type: filter
+    parameters:
+      operation: slice
+      array: "{{nodes.sort_by_value.output.sorted}}"
+      start: 0
+      end: 100
+    depends_on:
+      - sort_by_value
+
+  # Aggregate statistics by segment
+  - id: aggregate_by_segment
+    type: aggregate
+    parameters:
+      operation: aggregate
+      data: "{{nodes.calculate_segments.output.mapped}}"
+      group_by: "segment"
+      aggregations:
+        customer_count: "count()"
+        total_revenue: "sum(total_spent)"
+        avg_order_value: "avg(average_order)"
+        avg_lifetime_value: "avg(lifetime_value)"
+    depends_on:
+      - calculate_segments
+
+  # Aggregate statistics by country
+  - id: aggregate_by_country
+    type: aggregate
+    parameters:
+      operation: aggregate
+      data: "{{nodes.calculate_segments.output.mapped}}"
+      group_by: "country_code"
+      aggregations:
+        customer_count: "count()"
+        total_revenue: "sum(total_spent)"
+        avg_customer_value: "avg(lifetime_value)"
+    depends_on:
+      - calculate_segments
+
+  # Filter high-risk customers
+  - id: filter_high_risk
+    type: filter
+    parameters:
+      operation: filter
+      array: "{{nodes.calculate_segments.output.mapped}}"
+      condition: "item.risk_score > 0.7 && item.is_active == false"
+    depends_on:
+      - calculate_segments
+
+  # Convert to CSV for export
+  - id: convert_to_csv
+    type: csv_excel_parser
+    parameters:
+      operation: json_to_csv
+      data: "{{nodes.calculate_segments.output.mapped}}"
+      columns:
+        - customer_id
+        - full_name
+        - email_normalized
+        - country_code
+        - segment
+        - total_orders
+        - total_spent
+        - average_order
+        - lifetime_value
+        - is_active
+        - risk_score
+    depends_on:
+      - calculate_segments
+
+  # Upload to S3
+  - id: upload_to_s3
+    type: aws_s3
+    parameters:
+      operation: upload_object
+      bucket: "analytics-data"
+      key: "customer_data/{{workflow.execution_date}}/customers.csv"
+      content: "{{nodes.convert_to_csv.output.csv}}"
+      content_type: text/csv
+      tags:
+        source: customer_etl
+        date: "{{workflow.execution_date}}"
+    depends_on:
+      - convert_to_csv
+
+  # Store in DynamoDB
+  - id: batch_write_customers
+    type: aws_dynamodb
+    parameters:
+      operation: batch_write_items
+      table_name: CustomerAnalytics
+      items: "{{nodes.calculate_segments.output.mapped}}"
+    depends_on:
+      - calculate_segments
+
+  # Store segment statistics in database
+  - id: store_segment_stats
+    type: database
+    parameters:
+      operation: execute
+      query: |
+        INSERT INTO segment_statistics (date, segment, customer_count, total_revenue, avg_order_value)
+        VALUES (?, ?, ?, ?, ?)
+      parameters: "{{nodes.aggregate_by_segment.output.aggregated | map(segment => [workflow.execution_date, segment.segment, segment.customer_count, segment.total_revenue, segment.avg_order_value])}}"
+    depends_on:
+      - aggregate_by_segment
+
+  # Store country statistics
+  - id: store_country_stats
+    type: database
+    parameters:
+      operation: execute
+      query: |
+        INSERT INTO country_statistics (date, country_code, customer_count, total_revenue, avg_customer_value)
+        VALUES (?, ?, ?, ?, ?)
+      parameters: "{{nodes.aggregate_by_country.output.aggregated | map(country => [workflow.execution_date, country.country_code, country.customer_count, country.total_revenue, country.avg_customer_value])}}"
+    depends_on:
+      - aggregate_by_country
+
+  # Send high-risk customer alert
+  - id: alert_high_risk
+    type: switch
+    parameters:
+      value: "{{nodes.filter_high_risk.output.filtered | length()}}"
+      cases:
+        - condition: "> 0"
+          next: send_risk_alert
+    depends_on:
+      - filter_high_risk
+
+  - id: send_risk_alert
+    type: sendgrid
+    parameters:
+      operation: send_email
+      to: "risk-team@example.com"
+      subject: "High-Risk Customer Alert - {{workflow.execution_date}}"
+      content: |
+        <h2>High-Risk Customer Alert</h2>
+        <p>{{nodes.filter_high_risk.output.filtered | length()}} high-risk customers identified.</p>
+        <table>
+          <tr><th>Customer ID</th><th>Name</th><th>Risk Score</th><th>Last Order</th></tr>
+          {{#each nodes.filter_high_risk.output.filtered}}
+          <tr>
+            <td>{{customer_id}}</td>
+            <td>{{full_name}}</td>
+            <td>{{risk_score}}</td>
+            <td>{{last_order_date}}</td>
+          </tr>
+          {{/each}}
+        </table>
+      content_type: text/html
+    depends_on:
+      - alert_high_risk
+
+  # Generate summary report
+  - id: generate_report
+    type: template
+    parameters:
+      template: |
+        # Customer Data ETL Summary
+
+        **Execution Date:** {{workflow.execution_date}}
+
+        ## Processing Statistics
+        - Total Customers Processed: {{nodes.parse_customers.output.customers | length()}}
+        - Active Customers: {{nodes.filter_active_customers.output.filtered | length()}}
+        - Total Orders: {{nodes.parse_orders.output.orders | length()}}
+
+        ## Segment Distribution
+        {{#each nodes.aggregate_by_segment.output.aggregated}}
+        - **{{segment}}**: {{customer_count}} customers, ${{total_revenue}} revenue
+        {{/each}}
+
+        ## Top Countries
+        {{#each (nodes.aggregate_by_country.output.aggregated | sort_by('total_revenue', 'desc') | slice(0, 5))}}
+        - **{{country_code}}**: {{customer_count}} customers, ${{total_revenue}} revenue
+        {{/each}}
+
+        ## Risk Assessment
+        - High-Risk Customers: {{nodes.filter_high_risk.output.filtered | length()}}
+
+        ## Data Exports
+        - S3: s3://analytics-data/customer_data/{{workflow.execution_date}}/customers.csv
+        - DynamoDB: CustomerAnalytics table updated
+    depends_on:
+      - batch_write_customers
+      - store_segment_stats
+      - store_country_stats
+
+  # Send completion notification
+  - id: notify_completion
+    type: slack
+    parameters:
+      operation: send_message
+      channel: "#data-engineering"
+      text: "Customer ETL pipeline completed"
+      blocks:
+        - type: section
+          text:
+            type: mrkdwn
+            text: "{{nodes.generate_report.output.result}}"
+    depends_on:
+      - generate_report

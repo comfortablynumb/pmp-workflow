@@ -1,0 +1,244 @@
+# AWS Cloud Automation Workflow
+# Demonstrates: Lambda, S3, DynamoDB, CloudWatch, SQS/SNS
+# Use case: Process uploaded files, store results, and monitor execution
+
+name: AWS Serverless Data Processing
+description: Process files uploaded to S3 using Lambda, store results in DynamoDB, and monitor with CloudWatch
+version: "1.0"
+
+trigger:
+  type: webhook
+  parameters:
+    bucket: string
+    key: string
+    file_type: string
+
+nodes:
+  # Download file from S3
+  - id: download_file
+    type: aws_s3
+    parameters:
+      operation: download_object
+      bucket: "{{trigger.bucket}}"
+      key: "{{trigger.key}}"
+
+  # Get file metadata
+  - id: get_metadata
+    type: aws_s3
+    parameters:
+      operation: get_object_metadata
+      bucket: "{{trigger.bucket}}"
+      key: "{{trigger.key}}"
+    depends_on:
+      - download_file
+
+  # Send to SQS for processing
+  - id: send_to_queue
+    type: aws_messaging
+    parameters:
+      operation: send_sqs_message
+      queue_url: "https://sqs.us-east-1.amazonaws.com/123456789/file-processing"
+      message_body:
+        file_key: "{{trigger.key}}"
+        file_size: "{{nodes.get_metadata.output.metadata.content_length}}"
+        file_type: "{{trigger.file_type}}"
+      message_attributes:
+        priority:
+          data_type: String
+          string_value: high
+    depends_on:
+      - get_metadata
+
+  # Process file using Lambda
+  - id: invoke_processor
+    type: aws_lambda
+    parameters:
+      operation: invoke_function
+      function_name: file-processor
+      invocation_type: RequestResponse
+      payload:
+        bucket: "{{trigger.bucket}}"
+        key: "{{trigger.key}}"
+        content: "{{nodes.download_file.output.content}}"
+    depends_on:
+      - download_file
+
+  # Extract processing results
+  - id: extract_results
+    type: json_parse
+    parameters:
+      json_string: "{{nodes.invoke_processor.output.payload}}"
+    depends_on:
+      - invoke_processor
+
+  # Store results in DynamoDB
+  - id: store_results
+    type: aws_dynamodb
+    parameters:
+      operation: put_item
+      table_name: ProcessedFiles
+      item:
+        file_id:
+          S: "{{trigger.key}}"
+        processed_at:
+          S: "{{workflow.execution_time}}"
+        file_size:
+          N: "{{nodes.get_metadata.output.metadata.content_length}}"
+        results:
+          M: "{{nodes.extract_results.output}}"
+        status:
+          S: "completed"
+    depends_on:
+      - extract_results
+
+  # Upload processed results to S3
+  - id: upload_results
+    type: aws_s3
+    parameters:
+      operation: upload_object
+      bucket: "processed-files-bucket"
+      key: "results/{{trigger.key}}.json"
+      content: "{{nodes.extract_results.output}}"
+      content_type: application/json
+      storage_class: STANDARD_IA
+      tags:
+        source: "{{trigger.bucket}}/{{trigger.key}}"
+        processed_at: "{{workflow.execution_time}}"
+    depends_on:
+      - extract_results
+
+  # Create CloudWatch metric for processing time
+  - id: log_processing_time
+    type: aws_cloudwatch
+    parameters:
+      operation: put_metric_data
+      namespace: FileProcessing
+      metric_data:
+        - metric_name: ProcessingDuration
+          value: "{{nodes.invoke_processor.output.execution_duration}}"
+          unit: Milliseconds
+          dimensions:
+            - name: FileType
+              value: "{{trigger.file_type}}"
+    depends_on:
+      - invoke_processor
+
+  # Create CloudWatch log entry
+  - id: create_log
+    type: aws_cloudwatch
+    parameters:
+      operation: put_log_events
+      log_group_name: /aws/workflows/file-processing
+      log_stream_name: "{{workflow.execution_id}}"
+      log_events:
+        - timestamp: "{{workflow.execution_time}}"
+          message: |
+            File processed successfully
+            File: {{trigger.bucket}}/{{trigger.key}}
+            Size: {{nodes.get_metadata.output.metadata.content_length}} bytes
+            Duration: {{nodes.invoke_processor.output.execution_duration}}ms
+    depends_on:
+      - store_results
+
+  # Query DynamoDB for statistics
+  - id: query_stats
+    type: aws_dynamodb
+    parameters:
+      operation: query
+      table_name: ProcessedFiles
+      index_name: StatusIndex
+      key_condition_expression: "#status = :status"
+      expression_attribute_names:
+        "#status": status
+      expression_attribute_values:
+        ":status":
+          S: completed
+      limit: 100
+    depends_on:
+      - store_results
+
+  # Publish SNS notification
+  - id: publish_notification
+    type: aws_messaging
+    parameters:
+      operation: publish_sns
+      topic_arn: "arn:aws:sns:us-east-1:123456789:file-processing-complete"
+      message: "File {{trigger.key}} processed successfully"
+      subject: "File Processing Complete"
+      message_attributes:
+        file_type:
+          data_type: String
+          string_value: "{{trigger.file_type}}"
+        file_size:
+          data_type: Number
+          string_value: "{{nodes.get_metadata.output.metadata.content_length}}"
+    depends_on:
+      - upload_results
+
+  # Create CloudWatch alarm if processing took too long
+  - id: check_performance
+    type: switch
+    parameters:
+      value: "{{nodes.invoke_processor.output.execution_duration}}"
+      cases:
+        - condition: "> 5000"
+          next: create_alarm
+    depends_on:
+      - invoke_processor
+
+  - id: create_alarm
+    type: aws_cloudwatch
+    parameters:
+      operation: put_metric_alarm
+      alarm_name: "HighProcessingTime-{{trigger.file_type}}"
+      comparison_operator: GreaterThanThreshold
+      evaluation_periods: 1
+      metric_name: ProcessingDuration
+      namespace: FileProcessing
+      period: 300
+      statistic: Average
+      threshold: 5000
+      alarm_description: "Processing time exceeded 5 seconds"
+      alarm_actions:
+        - "arn:aws:sns:us-east-1:123456789:performance-alerts"
+    depends_on:
+      - check_performance
+
+  # Generate presigned URL for results download
+  - id: generate_download_url
+    type: aws_s3
+    parameters:
+      operation: generate_presigned_url
+      bucket: "processed-files-bucket"
+      key: "results/{{trigger.key}}.json"
+      expires_in: 3600
+    depends_on:
+      - upload_results
+
+  # Send summary to Slack
+  - id: notify_team
+    type: slack
+    parameters:
+      operation: send_message
+      channel: "#data-processing"
+      blocks:
+        - type: section
+          text:
+            type: mrkdwn
+            text: |
+              *File Processing Complete* ✅
+
+              • File: `{{trigger.key}}`
+              • Size: {{nodes.get_metadata.output.metadata.content_length}} bytes
+              • Processing time: {{nodes.invoke_processor.output.execution_duration}}ms
+              • Results: {{nodes.query_stats.output.count}} total files processed
+        - type: actions
+          elements:
+            - type: button
+              text:
+                type: plain_text
+                text: "Download Results"
+              url: "{{nodes.generate_download_url.output.url}}"
+    depends_on:
+      - generate_download_url
+      - query_stats
